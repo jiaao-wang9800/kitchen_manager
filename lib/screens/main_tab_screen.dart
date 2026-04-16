@@ -1,5 +1,7 @@
 // lib/screens/main_tab_screen.dart
 import 'package:flutter/material.dart';
+import 'inventory_screen.dart'; 
+import 'recipe_list_screen.dart'; // 👈 [新增] 引入刚刚建好的菜谱列表页面
 
 class MainTabScreen extends StatefulWidget {
   const MainTabScreen({super.key});
@@ -14,20 +16,16 @@ class _MainTabScreenState extends State<MainTabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 临时占位页面，防止连环报错找不到文件
+    // 将第二个页面替换为真实的 RecipeListScreen
     final List<Widget> screens = [
-      const Center(child: Text('厨房页面 (准备迁移中...)', style: TextStyle(fontSize: 24))),
-      const Center(child: Text('食谱页面 (准备迁移中...)', style: TextStyle(fontSize: 24))),
+      const InventoryScreen(), 
+      const RecipeListScreen(), // 👈 [关键修改]
       const Center(child: Text('日历页面 (准备迁移中...)', style: TextStyle(fontSize: 24))),
       const Center(child: Text('购物车页面 (准备迁移中...)', style: TextStyle(fontSize: 24))),
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Kitchen'),
-        centerTitle: true,
-      ),
-      body: screens[_selectedIndex],
+      body: screens[_selectedIndex], 
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed, 
         items: const <BottomNavigationBarItem>[
