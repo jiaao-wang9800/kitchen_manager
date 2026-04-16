@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart'; 
 import 'screens/splash_screen.dart'; // [修改] 导入刚建好的闪屏页
 
-final ValueNotifier<bool> isStardewTheme = ValueNotifier<bool>(true); // 默认开启星露谷主题！
+final ValueNotifier<bool> isStardewTheme = ValueNotifier<bool>(false); // 默认开启星露谷主题！
 
 void main() {
   // 确保引擎初始化

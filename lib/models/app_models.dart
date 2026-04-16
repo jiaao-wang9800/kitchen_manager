@@ -71,6 +71,8 @@ extension DietaryGroupExtension on DietaryGroup {
     }
   }
 }
+
+
 @HiveType(typeId: 2)
 class Ingredient extends HiveObject {
   @HiveField(0) String id;
@@ -125,19 +127,6 @@ class RecipeCategory extends HiveObject {
   @HiveField(1) String name;
   
   RecipeCategory({required this.id, required this.name});
-}
-
-@HiveType(typeId: 8)
-class RecipeIngredient extends HiveObject {
-  @HiveField(0) String ingredientId; 
-  @HiveField(1) String? quantity;    
-  @HiveField(2) bool isMain;         
-
-  RecipeIngredient({
-    required this.ingredientId,
-    this.quantity,
-    this.isMain = true,
-  });
 }
 
 @HiveType(typeId: 4)
@@ -205,5 +194,18 @@ class ShoppingItem extends HiveObject {
     this.isPurchased = false, 
     this.groupName,
     this.mealPlanId, 
+  });
+}
+
+@HiveType(typeId: 8)
+class RecipeIngredient extends HiveObject {
+  @HiveField(0) String ingredientId; 
+  @HiveField(1) String? quantity;    
+  @HiveField(2) bool isMain;         
+
+  RecipeIngredient({
+    required this.ingredientId,
+    this.quantity,
+    this.isMain = true,
   });
 }
