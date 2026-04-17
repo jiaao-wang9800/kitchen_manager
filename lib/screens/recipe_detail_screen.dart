@@ -8,6 +8,7 @@ import '../data/mock_database.dart'; // 仅用于 mealPlanBox 和 generateId()
 import '../providers/recipe_provider.dart';
 import '../providers/kitchen_provider.dart';
 import '../providers/meal_plan_provider.dart';
+import '../widgets/combine_meal_picker.dart';
 
 // ==========================================
 // Recipe Detail Screen (全面重构编辑功能 - Riverpod版)
@@ -122,49 +123,42 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     );
   }
 
+// 🌟 统一使用一体化餐段选择器
   void _addToCalendar(BuildContext context, WidgetRef ref) async {
-    // 1. 弹出日期选择器
-    final date = await showDatePicker(
+    // 1. 弹出我们自定义的紧凑版对话框
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (c) => CombinedMealPicker(initialDate: DateTime.now()),
     );
 
-    if (date == null || !context.mounted) return;
+    // 2. 如果用户点击了“确认添加”
+    if (result != null && context.mounted) {
+      final DateTime date = result['date'];
+      final MealType type = result['type'];
 
-    // 2. 弹出餐段选择器
-    final mealType = await showDialog<MealType>(
-      context: context,
-      builder: (c) => SimpleDialog(
-        title: const Text('选择餐段'),
-        children: MealType.values.map((t) => SimpleDialogOption(
-          onPressed: () => Navigator.pop(c, t),
-          child: Text(t.displayName),
-        )).toList(),
-      ),
-    );
-
-    if (mealType != null) {
-      // 3. 构建计划对象
+      // 3. 构建计划对象（注意：这里的 recipeId 根据你详情页的变量名可能是 widget.recipeId 或 recipe.id）
       final plan = MealPlan(
         id: generateId(), 
         date: date, 
-        type: mealType, 
-        recipeId: widget.recipeId // 或者是你传递进来的 recipe.id
-      );
+        type: type, 
+        recipeId: widget.recipeId      );
 
-      // 🔥 关键修复：绝对不要直接用 mealPlanBox.put(...)！
-      // 必须调用 Provider 的 notifier，这样全系统（日历页）才会收到“重绘”通知
+      // 4. 写入 Riverpod 状态，触发全局（日历页）更新
       await ref.read(mealPlanProvider.notifier).addMealPlan(plan);
 
+      // 5. 提示用户
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已成功加入菜单！✨'), backgroundColor: Colors.teal)
+          SnackBar(
+            content: Text('已成功安排在 ${date.month}月${date.day}日 ✨'), 
+            backgroundColor: const Color(0xFF10C07B),
+            behavior: SnackBarBehavior.floating, // 让提示框悬浮，更好看
+          )
         );
       }
     }
   }
+
   Widget _buildTimelineStep(int index, String text, bool isLast) {
     return IntrinsicHeight(
       child: Row(

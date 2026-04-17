@@ -8,6 +8,7 @@ import '../providers/kitchen_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/meal_plan_provider.dart';
 import '../screens/recipe_detail_screen.dart';
+import 'combine_meal_picker.dart';
 
 class RecipeCard extends ConsumerWidget {
   final Recipe recipe;
@@ -17,52 +18,40 @@ class RecipeCard extends ConsumerWidget {
 
   // 🌟 修复：重新实现日历添加逻辑（Riverpod 版）
   Future<void> _handleCalendarTap(BuildContext context, WidgetRef ref) async {
-    // 1. 如果有快捷日期，直接弹窗选餐段
-    DateTime? selectedDate = quickAddDate;
-    
-    // 2. 如果没有快捷日期，先选日期
-    if (selectedDate == null) {
-      selectedDate = await showDatePicker(
+      // 🌟 调用刚才写好的新弹窗
+      final result = await showDialog<Map<String, dynamic>>(
         context: context,
-        initialDate: DateTime.now(),
-        firstDate: DateTime.now().subtract(const Duration(days: 30)),
-        lastDate: DateTime.now().add(const Duration(days: 365)),
+        builder: (c) => CombinedMealPicker(initialDate: quickAddDate ?? DateTime.now()),
       );
-    }
 
-    if (selectedDate == null || !context.mounted) return;
+      // 如果用户没点取消，而是点了确认
+      if (result != null && context.mounted) {
+        final DateTime date = result['date'];
+        final MealType type = result['type'];
 
-    // 3. 选择餐段
-    final mealType = await showDialog<MealType>(
-      context: context,
-      builder: (c) => SimpleDialog(
-        title: const Text('选择餐段 (Meal Type)'),
-        children: MealType.values.map((t) => SimpleDialogOption(
-          onPressed: () => Navigator.pop(c, t),
-          child: Text(t.displayName, style: const TextStyle(fontSize: 16)),
-        )).toList(),
-      ),
-    );
-
-    if (mealType != null) {
-      final plan = MealPlan(
-        id: generateId(), 
-        date: selectedDate, 
-        type: mealType, 
-        recipeId: recipe.id
-      );
-      // 使用 Provider 写入数据库
-      await ref.read(mealPlanProvider.notifier).addMealPlan(plan);
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已加入 ${selectedDate.month}月${selectedDate.day}日 菜单'), backgroundColor: Colors.teal)
+        // 通过 Riverpod 写入
+        final plan = MealPlan(
+          id: generateId(), 
+          date: date, 
+          type: type, 
+          recipeId: recipe.id
         );
-        if (quickAddDate != null) Navigator.pop(context); // 快捷模式下自动关闭搜索
+        
+        await ref.read(mealPlanProvider.notifier).addMealPlan(plan);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('已将 ${recipe.name} 安排在 ${date.month}月${date.day}日'),
+              backgroundColor: const Color(0xFF4A5D4E),
+            ),
+          );
+          // 如果是快捷排餐模式，完成后自动退回日历
+          if (quickAddDate != null) Navigator.pop(context);
+        }
       }
     }
-  }
-
+    
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inventory = ref.watch(inventoryProvider);
