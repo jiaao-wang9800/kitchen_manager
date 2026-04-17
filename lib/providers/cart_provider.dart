@@ -1,7 +1,7 @@
 // lib/providers/cart_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_models.dart';
-import '../data/mock_database.dart';
+import '../data/mock_database.dart'; // 仅用于 generateId
 
 class CartNotifier extends Notifier<List<ShoppingItem>> {
   @override
@@ -9,18 +9,35 @@ class CartNotifier extends Notifier<List<ShoppingItem>> {
 
   void refresh() => state = shoppingCartBox.values.toList();
 
-  // 核心功能：智能一键将菜谱中缺货的食材加入购物车
+  // 添加或更新单项
+  Future<void> addOrUpdateItem(ShoppingItem item) async {
+    await shoppingCartBox.put(item.id, item);
+    refresh();
+  }
+
+  // 删除单项
+  Future<void> deleteItem(ShoppingItem item) async {
+    await item.delete();
+    refresh();
+  }
+
+  // 一键清空已购物品
+  Future<void> clearPurchased() async {
+    final purchasedItems = state.where((item) => item.isPurchased).toList();
+    for (var item in purchasedItems) {
+      await item.delete();
+    }
+    refresh();
+  }
+
+  // 智能一键将菜谱中缺货的食材加入购物车
   Future<int> addMissingIngredientsForRecipe(Recipe recipe, List<Ingredient> inventory) async {
     int addedCount = 0;
-    
     for (var ri in recipe.ingredients) {
       final targetIng = inventory.where((i) => i.id == ri.ingredientId).firstOrNull;
       final inStock = targetIng?.inStock ?? false;
-      
-      // 如果家里没有这个食材，且购物车里也还没加过
       if (!inStock) {
         final alreadyInCart = state.any((item) => item.ingredientId == ri.ingredientId && !item.isPurchased);
-        
         if (!alreadyInCart) {
           final newItem = ShoppingItem(
             id: '${generateId()}_${ri.ingredientId}',
@@ -32,9 +49,8 @@ class CartNotifier extends Notifier<List<ShoppingItem>> {
         }
       }
     }
-    
     refresh();
-    return addedCount; // 返回添加的数量，用于 UI 提示
+    return addedCount;
   }
 }
 

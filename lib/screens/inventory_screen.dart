@@ -60,17 +60,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('AI 功能迁移中...')));
               },
             ),
-            ValueListenableBuilder<bool>(
-              valueListenable: isStardewTheme,
-              builder: (context, isStardew, child) {
-                return IconButton(
-                  icon: Icon(isStardew ? Icons.wb_sunny_outlined : Icons.palette_outlined), 
-                  tooltip: 'Switch Theme', 
-                  onPressed: () => isStardewTheme.value = !isStardewTheme.value
-                );
-              },
-            ),
-          ],
+            ],
         ),
         body: Column(
           children: [
