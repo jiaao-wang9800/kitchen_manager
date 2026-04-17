@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import '../models/app_models.dart';
 import '../data/mock_database.dart'; // 仅保留用于直接操作未迁移的Box和生成ID
-import '../services/ai_service.dart';
+import '../services/ai_receipt_service.dart';
 import '../providers/recipe_provider.dart';
 import '../providers/kitchen_provider.dart';
 
@@ -340,6 +340,12 @@ class _AiImportDialogState extends ConsumerState<AiImportDialog> {
   List<XFile> selectedImages = []; 
 
   @override
+  void dispose() {
+    textCtrl.dispose(); // 🌟 别忘了释放它
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Row(children: [Icon(Icons.auto_awesome, color: Colors.amber), SizedBox(width: 8), Text('AI Smart Import')]),
@@ -353,7 +359,11 @@ class _AiImportDialogState extends ConsumerState<AiImportDialog> {
                 children: [
                   const Text('Paste text or upload screenshots/receipts.', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   const SizedBox(height: 12),
-                  TextField(controller: textCtrl, maxLines: 4, decoration: const InputDecoration(hintText: 'e.g. Tomato scrambled eggs...', border: OutlineInputBorder())),
+                  TextField(controller: textCtrl, maxLines: 4, 
+                  onChanged: (value) {
+                      setState(() {}); 
+                    },
+                  decoration: const InputDecoration(hintText: 'e.g. Tomato scrambled eggs...', border: OutlineInputBorder())),
                   const SizedBox(height: 12),
                   if (selectedImages.isNotEmpty)
                     SizedBox(
@@ -378,20 +388,47 @@ class _AiImportDialogState extends ConsumerState<AiImportDialog> {
       actions: [
         if (!isLoading) TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         if (!isLoading) ElevatedButton(
-          onPressed: (textCtrl.text.isEmpty && selectedImages.isEmpty) ? null : () async {
-            setState(() => isLoading = true);
-            final recipe = await AiService.importRecipeFromAi(textContent: textCtrl.text, imageFiles: selectedImages);
-            if (context.mounted) {
-              Navigator.pop(context); 
-              if (recipe != null) { 
-                // [修改] AI 导入成功后，通知 Riverpod 刷新全局列表
-                ref.read(recipeProvider.notifier).refresh(); 
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Imported: ${recipe.name}!'))); 
-              } 
-              else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to parse recipe.'))); }
+        onPressed: (textCtrl.text.trim().isEmpty && selectedImages.isEmpty)
+        ? null : () async {
+          setState(() => isLoading = true);
+          
+          try {
+            // 🌟 核心改动：将 XFile 列表转换为字节列表
+            List<Uint8List> imageBytesList = [];
+            for (var file in selectedImages) {
+              final bytes = await file.readAsBytes();
+              imageBytesList.add(bytes);
             }
-          },
-          child: const Text('Generate'),
+
+            // 调用已经升级为“字节模式”的 AiService
+            final recipe = await AiService.importRecipeFromAi(
+              textContent: textCtrl.text, 
+              imageBytesList: imageBytesList, // 🌟 传入转换好的字节
+              allCategories: ref.read(categoryProvider),
+              currentInventory: ref.read(inventoryProvider),
+              inventoryNotifier: ref.read(inventoryProvider.notifier),
+            );
+
+            if (recipe != null) {
+              await ref.read(recipeProvider.notifier).addOrUpdateRecipe(recipe);
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('✨ 菜谱已智能导入并分析营养成分')),
+                );
+              }
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('发生错误: $e'), backgroundColor: Colors.red),
+              );
+            }
+          } finally {
+            if (mounted) setState(() => isLoading = false);
+          }
+        },
+        child: const Text('Generate'),
         )
       ],
     );

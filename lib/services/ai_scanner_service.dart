@@ -1,4 +1,4 @@
-// lib/services/receipt_scanner_service.dart
+// lib/services/ai_scanner_service.dart
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';

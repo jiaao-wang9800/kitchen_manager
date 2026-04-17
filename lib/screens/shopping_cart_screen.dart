@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/app_models.dart';
 import '../data/mock_database.dart'; // 仅保留用于 generateId
-import '../services/receipt_scanner_service.dart';
+import '../services/ai_scanner_service.dart';
 import '../providers/kitchen_provider.dart';
 import '../providers/cart_provider.dart';
 
