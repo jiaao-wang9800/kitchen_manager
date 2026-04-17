@@ -9,6 +9,17 @@ class MealPlanNotifier extends Notifier<List<MealPlan>> {
 
   void refresh() => state = mealPlanBox.values.toList();
 
+  // 🌟 新增：切换完成状态
+  Future<void> toggleCompletion(String id, bool completed) async {
+    final plan = mealPlanBox.get(id);
+    if (plan != null) {
+      plan.isCompleted = completed;
+      await mealPlanBox.put(id, plan);
+      // 刷新 Riverpod 状态
+      state = state.map((p) => p.id == id ? plan : p).toList();
+    }
+  }
+
 // 🌟 修复后的添加方法
   Future<void> addMealPlan(MealPlan plan) async {
     // 1. 写入物理数据库 (Hive)

@@ -45,16 +45,24 @@ void syncMemoryWithHive() {
 
 Future<void> _seedInitialData() async {
   final defaultCategories = [
-    IngredientCategory(id: 'cat_f1', name: 'fresh meat', location: StorageLocation.fridge),
-    IngredientCategory(id: 'cat_f2', name: 'egg & milk', location: StorageLocation.fridge),
-    IngredientCategory(id: 'cat_f3', name: 'vegetables', location: StorageLocation.fridge),
+    IngredientCategory(id: 'cat_f1', name: '鲜肉', location: StorageLocation.fridge),
+    IngredientCategory(id: 'cat_f2', name: '鸡蛋&乳制品', location: StorageLocation.fridge),
+    IngredientCategory(id: 'cat_f3', name: '蔬菜', location: StorageLocation.fridge),
     IngredientCategory(id: 'cat_fz1', name: '快手早餐', location: StorageLocation.freezer),
     IngredientCategory(id: 'cat_fz2', name: '丸子', location: StorageLocation.freezer),
     IngredientCategory(id: 'cat_fz3', name: '海鲜', location: StorageLocation.freezer),
+    IngredientCategory(id: 'cat_fz4', name: '冻肉', location: StorageLocation.freezer),
     IngredientCategory(id: 'cat_c1', name: '米', location: StorageLocation.cupboard),
     IngredientCategory(id: 'cat_c2', name: '面', location: StorageLocation.cupboard),
     IngredientCategory(id: 'cat_c3', name: '粉', location: StorageLocation.cupboard),
-    IngredientCategory(id: 'cat_s1', name: '卤料', location: StorageLocation.spices),
+    IngredientCategory(id: 'cat_c4', name: '粗粮', location: StorageLocation.cupboard),
+    IngredientCategory(id: 'cat_c5', name: '豆类', location: StorageLocation.cupboard),
+    IngredientCategory(id: 'cat_c6', name: '干货', location: StorageLocation.cupboard),
+    IngredientCategory(id: 'cat_c7', name: '罐头', location: StorageLocation.cupboard),
+    IngredientCategory(id: 'cat_s1', name: '香料', location: StorageLocation.spices),
+    IngredientCategory(id: 'cat_s2', name: '食用油', location: StorageLocation.spices),
+    IngredientCategory(id: 'cat_s3', name: '基础调味料', location: StorageLocation.spices),
+    IngredientCategory(id: 'cat_s4', name: '复合调味包', location: StorageLocation.spices),
   ];
 
   for (var cat in defaultCategories) {

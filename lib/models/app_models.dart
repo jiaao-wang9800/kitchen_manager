@@ -176,8 +176,9 @@ class MealPlan extends HiveObject {
   @HiveField(1) DateTime date;
   @HiveField(2) MealType type;
   @HiveField(3) String recipeId;
+  @HiveField(4) bool isCompleted;
   
-  MealPlan({required this.id, required this.date, required this.type, required this.recipeId});
+  MealPlan({required this.id, required this.date, required this.type, required this.recipeId, this.isCompleted = false});
 }
 
 @HiveType(typeId: 7)
