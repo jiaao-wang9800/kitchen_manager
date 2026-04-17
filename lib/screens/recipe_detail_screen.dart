@@ -7,6 +7,7 @@ import '../models/app_models.dart';
 import '../data/mock_database.dart'; // 仅用于 mealPlanBox 和 generateId()
 import '../providers/recipe_provider.dart';
 import '../providers/kitchen_provider.dart';
+import '../providers/meal_plan_provider.dart';
 
 // ==========================================
 // Recipe Detail Screen (全面重构编辑功能 - Riverpod版)
@@ -121,35 +122,49 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     );
   }
 
-  // 这里的日历功能暂时保留旧的 Box 操作，因为我们还没迁移 Calendar
-  Future<void> _addToCalendar() async {
+  void _addToCalendar(BuildContext context, WidgetRef ref) async {
+    // 1. 弹出日期选择器
     final date = await showDatePicker(
-      context: context, initialDate: DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 30)), lastDate: DateTime.now().add(const Duration(days: 365))
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
+
     if (date == null || !context.mounted) return;
 
+    // 2. 弹出餐段选择器
     final mealType = await showDialog<MealType>(
       context: context,
       builder: (c) => SimpleDialog(
-        title: const Text('选择餐段 (Meal Type)'),
+        title: const Text('选择餐段'),
         children: MealType.values.map((t) => SimpleDialogOption(
           onPressed: () => Navigator.pop(c, t),
-          child: Text(t.displayName, style: const TextStyle(fontSize: 16)),
+          child: Text(t.displayName),
         )).toList(),
-      )
+      ),
     );
 
     if (mealType != null) {
-      final plan = MealPlan(id: generateId(), date: date, type: mealType, recipeId: widget.recipeId);
-      await mealPlanBox.put(plan.id, plan);
-      syncMemoryWithHive(); // 仅日历保留此方法
+      // 3. 构建计划对象
+      final plan = MealPlan(
+        id: generateId(), 
+        date: date, 
+        type: mealType, 
+        recipeId: widget.recipeId // 或者是你传递进来的 recipe.id
+      );
+
+      // 🔥 关键修复：绝对不要直接用 mealPlanBox.put(...)！
+      // 必须调用 Provider 的 notifier，这样全系统（日历页）才会收到“重绘”通知
+      await ref.read(mealPlanProvider.notifier).addMealPlan(plan);
+
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('成功加入菜单！', style: TextStyle(color: Colors.white)), backgroundColor: Colors.teal));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已成功加入菜单！✨'), backgroundColor: Colors.teal)
+        );
       }
     }
   }
-
   Widget _buildTimelineStep(int index, String text, bool isLast) {
     return IntrinsicHeight(
       child: Row(
@@ -285,7 +300,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                             icon: const Icon(Icons.calendar_month, size: 16),
                             label: const Text('加入日历'),
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A5D4E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 0),
-                            onPressed: _addToCalendar,
+                            onPressed: () => _addToCalendar(context, ref),
                           )
                       ],
                     ),

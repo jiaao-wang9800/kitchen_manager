@@ -9,15 +9,25 @@ class MealPlanNotifier extends Notifier<List<MealPlan>> {
 
   void refresh() => state = mealPlanBox.values.toList();
 
+// 🌟 修复后的添加方法
   Future<void> addMealPlan(MealPlan plan) async {
+    // 1. 写入物理数据库 (Hive)
     await mealPlanBox.put(plan.id, plan);
-    refresh();
+    
+    // 2. 🌟 关键：更新 Riverpod 的内存状态 (state)
+    // 在 Riverpod 中，必须通过赋一个全新的 List 对象来触发 UI 刷新
+    state = [...state, plan]; 
+    
+    // 这样，任何 watch(mealPlanProvider) 的页面（比如日历页）都会瞬间收到通知并重绘
   }
 
-  Future<void> deleteMealPlan(MealPlan plan) async {
-    await plan.delete();
-    refresh();
+// 🌟 顺便把删除方法也修好
+  Future<void> deleteMealPlan(String id) async {
+    await mealPlanBox.delete(id);
+    // 过滤掉被删除的那一项，重新赋值 state
+    state = state.where((p) => p.id != id).toList();
   }
+
 }
 
 final mealPlanProvider = NotifierProvider<MealPlanNotifier, List<MealPlan>>(() => MealPlanNotifier());

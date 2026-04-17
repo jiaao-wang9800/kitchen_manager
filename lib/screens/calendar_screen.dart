@@ -261,7 +261,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       leading: Checkbox(value: isSynced, activeColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)), onChanged: (val) async { setState(() { val! ? _syncedPlanIds.add(plan.id) : _syncedPlanIds.remove(plan.id); }); await _triggerSync(); }),
       trailing: IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20), onPressed: () async { 
         _syncedPlanIds.remove(plan.id); 
-        await ref.read(mealPlanProvider.notifier).deleteMealPlan(plan); 
+        await ref.read(mealPlanProvider.notifier).deleteMealPlan(plan.id); 
         await _triggerSync(); 
       }),
     );
