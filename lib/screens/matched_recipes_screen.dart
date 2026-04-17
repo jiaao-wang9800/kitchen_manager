@@ -66,7 +66,10 @@ class MatchedRecipesScreen extends ConsumerWidget {
               itemCount: matchedRecipes.length,
               itemBuilder: (context, index) {
                 // 复用我们强大的共享组件
-                return RecipeCard(recipe: matchedRecipes[index]);
+                return RecipeCard(
+                  recipe: matchedRecipes[index],
+                  quickAddDate: targetDate, 
+                );
               },
             ),
     );

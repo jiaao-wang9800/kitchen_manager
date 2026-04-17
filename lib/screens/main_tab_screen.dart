@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'inventory_screen.dart'; 
 import 'recipe_list_screen.dart'; // 👈 [新增] 引入刚刚建好的菜谱列表页面
+import 'calendar_screen.dart';
 
 class MainTabScreen extends StatefulWidget {
   const MainTabScreen({super.key});
@@ -20,7 +21,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
     final List<Widget> screens = [
       const InventoryScreen(), 
       const RecipeListScreen(), // 👈 [关键修改]
-      const Center(child: Text('日历页面 (准备迁移中...)', style: TextStyle(fontSize: 24))),
+      const CalendarScreen(),
       const Center(child: Text('购物车页面 (准备迁移中...)', style: TextStyle(fontSize: 24))),
     ];
 
