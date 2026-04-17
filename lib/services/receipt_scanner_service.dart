@@ -4,9 +4,12 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/app_models.dart';
+import '../config/api_keys.dart'; // 导入你的私人配置
+
 
 class ReceiptScannerService {
-  static const String _apiKey = 'AIzaSyAp0N9lyLfdbZkHPTwfswNeOVybY3M6zOc';
+
+static const String _apiKey = ApiConfig.openAiKey;
 
   // 🌟 NEW: Added `categories` parameter so AI knows our actual kitchen layout
   static Future<List<Map<String, dynamic>>> scanGroceries(

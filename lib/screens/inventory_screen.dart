@@ -7,6 +7,7 @@ import '../widgets/stardew_panel.dart';
 import '../widgets/ingredient_edit_dialog.dart';
 import '../main.dart'; // for isStardewTheme
 import 'matched_recipes_screen.dart'; // 👈 新增导入
+import '../widgets/ingredient_card.dart';
 
 class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
@@ -56,12 +57,36 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             IconButton(
               icon: const Icon(Icons.bolt, color: Colors.orangeAccent), 
               tooltip: '一键刷新营养成分', 
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('AI 功能迁移中...')));
+              onPressed: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('🤖 AI 正在分析库中食材，请稍候...'))
+                );
+                try {
+                  // 🌟 呼叫 Riverpod 后台执行 AI 任务
+                  final count = await ref.read(inventoryProvider.notifier).batchAnalyzeNutrition();
+                  
+                  if (context.mounted) {
+                    if (count > 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('✨ 成功为 $count 项食材匹配营养标签！'), backgroundColor: const Color(0xFF10C07B))
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('所有食材都已分析完毕，无需刷新啦 ✨'))
+                      );
+                    }
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('分析失败，请检查网络或 API 设置'), backgroundColor: Colors.red)
+                    );
+                  }
+                }
               },
             ),
-            ],
-        ),
+          ],
+        ),  
         body: Column(
           children: [
             _buildTopLocationBar(),
@@ -203,8 +228,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                   child: Text('还没有添加食材哦', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
                 )
               else
-                ...ingredients.map((ing) => _buildIngredientCard(ing)),
-                
+                ...ingredients.map((ing) => IngredientCard(ingredient: ing)),
               Padding(
                 padding: const EdgeInsets.only(bottom: 24.0, top: 4.0),
                 child: InkWell(
@@ -224,59 +248,4 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
-  Widget _buildIngredientCard(Ingredient ing) {
-    bool isExpired = ing.expirationDate != null && ing.expirationDate!.isBefore(DateTime.now());
-    bool isOutOfStock = !ing.inStock;
-    
-    return Opacity(
-      opacity: isOutOfStock ? 0.4 : 1.0, 
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(color: const Color(0xFFF8F9FA), borderRadius: BorderRadius.circular(12)),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          leading: CircleAvatar(backgroundColor: Colors.white, child: Icon(Icons.kitchen, color: Colors.grey.shade400)),
-          title: Text(ing.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
-          subtitle: ing.dietaryGroup != null ? Padding(
-            padding: const EdgeInsets.only(top: 4.0),
-            child: Wrap(
-              spacing: 6,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.orange.shade200)),
-                  child: Text(
-                    '${ing.dietaryGroup!.displayName}', 
-                    style: TextStyle(fontSize: 10, color: Colors.orange.shade700, fontWeight: FontWeight.bold)
-                  ),
-                )
-              ],
-            ),
-          ) : null,
-          
-          onTap: () {
-            Navigator.push(
-              context, 
-              MaterialPageRoute(builder: (context) => MatchedRecipesScreen(ingredient: ing))
-            );
-          },
-          
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!isOutOfStock)
-                IconButton(
-                  icon: const Icon(Icons.check_circle_outline, color: Colors.teal, size: 22), 
-                  onPressed: () => ref.read(inventoryProvider.notifier).consumeIngredient(ing, addToCart: true)
-                ),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 22), 
-                onPressed: () => _showIngredientDialog(existingIngredient: ing)
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

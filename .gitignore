@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# 忽略敏感配置文件
+lib/config/api_keys.dart

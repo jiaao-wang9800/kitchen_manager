@@ -6,10 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import '../models/app_models.dart';
 import '../data/mock_database.dart';
 //import 'ai_nutrition_service.dart'; // NEW: Import the nutrition service
+import '../config/api_keys.dart'; // 导入你的私人配置
 
 class AiService {
   // IMPORTANT: Ensure your actual API key is here
-  static const String _apiKey = 'AIzaSyAp0N9lyLfdbZkHPTwfswNeOVybY3M6zOc'; 
+  static const String _apiKey = ApiConfig.openAiKey;
+
 
   static Future<Recipe?> importRecipeFromAi({String? textContent, List<XFile>? imageFiles}) async {
     if (_apiKey == 'YOUR_API_KEY_HERE' || _apiKey.isEmpty) {

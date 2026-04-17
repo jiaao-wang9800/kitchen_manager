@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/app_models.dart';
 import '../data/mock_database.dart';
+import '../config/api_keys.dart'; // 导入你的私人配置
 
 class AiNutritionService {
   // IMPORTANT: Replace this with your actual API key
-  static const String _apiKey = 'AIzaSyAp0N9lyLfdbZkHPTwfswNeOVybY3M6zOc';
-
+  static const String _apiKey = ApiConfig.openAiKey;
 
   // ==========================================
   // 2. 🌟 全新的真·批量分析 (极大节省 Token)

@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_models.dart';
 import '../data/mock_database.dart';
+import '../services/ai_nutrition_service.dart';
 
 // 管理分类状态
 class CategoryNotifier extends Notifier<List<IngredientCategory>> {
@@ -52,6 +53,48 @@ class InventoryNotifier extends Notifier<List<Ingredient>> {
       await shoppingCartBox.put(shoppingItem.id, shoppingItem);
     }
     refresh();
+  }
+
+  Future<int> batchAnalyzeNutrition() async {
+    // 1. 找出所有还没有膳食分类的食材
+    final needsAnalysis = state.where((ing) => ing.dietaryGroup == null).toList();
+    if (needsAnalysis.isEmpty) return 0; // 如果都分析过了，直接返回 0
+
+    // 2. 开启 Loading 状态 (通知 UI 转圈圈)
+    for (var ing in needsAnalysis) {
+      ing.isAiAnalyzing = true;
+    }
+    state = [...state]; // 触发 UI 刷新
+
+    try {
+      // 3. 提取名字，发送给 AI 服务
+      final namesToAnalyze = needsAnalysis.map((i) => i.name).toList();
+      final results = await AiNutritionService.batchAnalyzeIngredients(namesToAnalyze);
+
+      // 4. 将 AI 结果写入实体并保存到 Hive
+      for (var ing in needsAnalysis) {
+        ing.isAiAnalyzing = false;
+        if (results.containsKey(ing.name)) {
+          final data = results[ing.name];
+          ing.dietaryGroup = data['group'];
+          ing.caloriesPer100g = data['cal'];
+          ing.nutritionalTags = data['tags'];
+        }
+        await inventoryBox.put(ing.id, ing);
+      }
+      
+      // 5. 更新全局状态
+      state = inventoryBox.values.toList();
+      return needsAnalysis.length;
+
+    } catch (e) {
+      // 失败了也要把转圈圈关掉
+      for (var ing in needsAnalysis) {
+        ing.isAiAnalyzing = false;
+      }
+      state = [...state];
+      throw Exception('AI Analysis Failed: $e');
+    }
   }
 }
 final inventoryProvider = NotifierProvider<InventoryNotifier, List<Ingredient>>(() {
