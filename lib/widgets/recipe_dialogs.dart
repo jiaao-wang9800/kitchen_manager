@@ -105,12 +105,47 @@ class _RecipeEditDialogState extends ConsumerState<RecipeEditDialog> {
               ),
               const SizedBox(height: 16),
               const Text('Tags / Categories:', style: TextStyle(fontWeight: FontWeight.bold)),
-              Wrap(spacing: 8.0, children: allRecipeCategories.map((cat) { 
-                return FilterChip(
-                  label: Text(cat.name), selected: selectedRecipeCatIds.contains(cat.id), selectedColor: const Color(0xFF4A5D4E).withValues(alpha: 0.3), 
-                  onSelected: (bool selected) { setState(() { selected ? selectedRecipeCatIds.add(cat.id) : selectedRecipeCatIds.remove(cat.id); }); }
-                ); 
-              }).toList()),
+              const SizedBox(height: 10),
+              allRecipeCategories.isEmpty
+                  ? const Text('暂无可用的标签，去浏览页右上角添加吧~', style: TextStyle(color: Colors.grey, fontSize: 13))
+                  : Wrap(
+                      spacing: 10.0,
+                      runSpacing: 10.0,
+                      children: allRecipeCategories.map((cat) {
+                        final isSelected = selectedRecipeCatIds.contains(cat.id);
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () {
+                            setState(() {
+                              isSelected ? selectedRecipeCatIds.remove(cat.id) : selectedRecipeCatIds.add(cat.id);
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200), // 丝滑的变色动画
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              // 选中时用显眼的纯绿色，未选中用浅灰色
+                              color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade300,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              cat.name,
+                              style: TextStyle(
+                                // 选中时文字变白且加粗
+                                color: isSelected ? Colors.white : Colors.grey.shade700,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+              const SizedBox(height: 8),
               const Divider(),
               
               // --- 3. 食材区 (完美复刻你的神仙内联 UI，去掉了右上角的 New) ---

@@ -34,6 +34,9 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
   
   final ImagePicker _picker = ImagePicker(); 
 
+  // 用来记录在详情页编辑时，选中了哪些标签
+  List<String> _editCategoryIds = [];
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +69,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
       recipe.name = _nameController.text;
       recipe.steps = _stepControllers.map((c) => c.text).where((t) => t.isNotEmpty).toList();
       recipe.ingredients = _selectedIngredients;
+      recipe.categoryIds = _editCategoryIds;
     });
     // 🌟 核心修改：使用 Riverpod 保存并刷新全局状态，抛弃旧的 syncMemoryWithHive
     await ref.read(recipeProvider.notifier).addOrUpdateRecipe(recipe);
@@ -218,7 +222,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     final filteredIngredients = inventory.where((ing) => ing.name.toLowerCase().contains(_ingSearchQuery.toLowerCase())).toList();
     final mains = _selectedIngredients.where((ri) => ri.isMain).toList();
     final seasonings = _selectedIngredients.where((ri) => !ri.isMain).toList();
-
+    
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA), 
       body: Stack(
@@ -277,18 +281,71 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          child: Wrap(
-                            spacing: 8, runSpacing: 8,
-                            children: allRecipeCategories.where((cat) => recipe.categoryIds.contains(cat.id)).map((cat) =>
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(color: const Color(0xFF4A5D4E).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)),
-                                child: Text(cat.name, style: const TextStyle(fontSize: 13, color: Color(0xFF4A5D4E), fontWeight: FontWeight.bold)),
-                              )
-                            ).toList(),
-                          ),
+                          Expanded(
+                          child: _isEditing
+                              // ==========================================
+                              // ✏️ 编辑模式：显示所有的标签，并且可以点击修改
+                              // ==========================================
+                              ? (allRecipeCategories.isEmpty
+                                  ? const Text('暂无可用的标签~', style: TextStyle(color: Colors.grey, fontSize: 13))
+                                  : Wrap(
+                                      spacing: 10.0,
+                                      runSpacing: 10.0,
+                                      children: allRecipeCategories.map((cat) {
+                                        final isSelected = _editCategoryIds.contains(cat.id);
+                                        return InkWell(
+                                          borderRadius: BorderRadius.circular(20),
+                                          onTap: () {
+                                            setState(() {
+                                              isSelected ? _editCategoryIds.remove(cat.id) : _editCategoryIds.add(cat.id);
+                                            });
+                                          },
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 200),
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade100,
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade300,
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              cat.name,
+                                              style: TextStyle(
+                                                color: isSelected ? Colors.white : Colors.grey.shade700,
+                                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ))
+                              // ==========================================
+                              // 👁️ 浏览模式：(你原本的代码) 只显示已有的标签
+                              // ==========================================
+                              : Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: allRecipeCategories
+                                      .where((cat) => recipe.categoryIds.contains(cat.id))
+                                      .map((cat) => Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                                color: const Color(0xFF4A5D4E).withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(16)),
+                                            child: Text(cat.name,
+                                                style: const TextStyle(
+                                                    fontSize: 13,
+                                                    color: Color(0xFF4A5D4E),
+                                                    fontWeight: FontWeight.bold)),
+                                          ))
+                                      .toList(),
+                                ),
                         ),
+
                         if (!_isEditing)
                           ElevatedButton.icon(
                             icon: const Icon(Icons.calendar_month, size: 16),
@@ -306,8 +363,15 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (_isEditing) ...[
-                        TextField(controller: _nameController, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold), decoration: const InputDecoration(labelText: 'Recipe Name', border: OutlineInputBorder())),
-                        const SizedBox(height: 30),
+                        // 1. 菜谱名字输入框
+                        TextField(
+                          controller: _nameController, 
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold), 
+                          decoration: const InputDecoration(labelText: 'Recipe Name', border: OutlineInputBorder())
+                        ),
+                        const SizedBox(height: 16),
+
+                      
                       ],
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -490,9 +554,22 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                   child: IconButton(
                     icon: Icon(_isEditing ? Icons.check : Icons.edit_outlined, color: Colors.black87, size: 20),
                     onPressed: () async {
-                      if (_isEditing) await _saveChanges(recipe);
-                      setState(() => _isEditing = !_isEditing);
-                    },
+                        if (_isEditing) {
+                          // 1. 如果当前已经是编辑状态，说明你点击是为了“保存”
+                          // 🌟 在保存之前，把我们选好的新标签赋值给 recipe
+                          recipe.categoryIds = _editCategoryIds; 
+                          
+                          await _saveChanges(recipe);
+                          setState(() => _isEditing = false); // 退出编辑模式
+                        } else {
+                          // 2. 如果当前不是编辑状态，说明你点击是为了“开始编辑”
+                          setState(() {
+                            _isEditing = true; // 进入编辑模式
+                            // 🌟 核心：就在这一刻，把菜谱原有的标签复制到我们的编辑池里！
+                            _editCategoryIds = List.from(recipe.categoryIds); 
+                          });
+                        }
+                      },
                   ),
                 ),
               ],
