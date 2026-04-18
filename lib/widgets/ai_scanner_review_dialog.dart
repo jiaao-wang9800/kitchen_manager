@@ -216,38 +216,50 @@ class _AiScannerReviewDialogState extends ConsumerState<AiScannerReviewDialog> {
                               const SizedBox(height: 12),
                               
                               // 🌟 强力升级：带搜索功能的下拉菜单 (DropdownMenu)
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  return DropdownMenu<String?>(
-                                    width: constraints.maxWidth, // 占满卡片宽度
-                                    initialSelection: item['matchedIngredientId'],
-                                    enableSearch: true, // 开启文本搜索
-                                    enableFilter: true, // 开启列表过滤
-                                    hintText: '搜索并关联现有食材...',
-                                    textStyle: const TextStyle(fontSize: 14),
-                                    menuHeight: 200, // 限制最大高度
-                                    inputDecorationTheme: InputDecorationTheme(
-                                      isDense: true,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                                      fillColor: Colors.white,
-                                      filled: true,
+                              // 🌟 强力升级：伪装成下拉框的按钮，点击呼出专用的搜索弹窗
+                              Builder(
+                                builder: (context) {
+                                  final matchedId = item['matchedIngredientId'];
+                                  final matchedIng = matchedId != null 
+                                      ? currentInventory.where((i) => i.id == matchedId).firstOrNull 
+                                      : null;
+                                  
+                                  return InkWell(
+                                    onTap: () => _showSearchableSelect(index, currentInventory),
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.grey.shade300),
+                                        borderRadius: BorderRadius.circular(8),
+                                        color: Colors.white,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            matchedId == null ? Icons.add_circle_outline : Icons.link, 
+                                            size: 18, 
+                                            color: matchedId == null ? Colors.orange : Colors.teal
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              matchedId == null ? '✨ 作为新食材入库 (不合并)' : '🔗 合并至: ${matchedIng?.name ?? '未知食材'}',
+                                              style: TextStyle(
+                                                fontSize: 14, 
+                                                color: matchedId == null ? Colors.orange.shade700 : Colors.black87,
+                                                fontWeight: matchedId == null ? FontWeight.bold : FontWeight.normal,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                                        ],
+                                      ),
                                     ),
-                                    dropdownMenuEntries: [
-                                      const DropdownMenuEntry(value: null, label: '✨ 作为新食材入库 (不合并)'),
-                                      // 动态渲染现有库存供搜索
-                                      ...currentInventory.map((ing) => DropdownMenuEntry(
-                                        value: ing.id, 
-                                        label: '🔗 合并至: ${ing.name}',
-                                      )),
-                                    ],
-                                    onSelected: (val) {
-                                      setState(() => item['matchedIngredientId'] = val);
-                                    },
                                   );
                                 }
-                              ),
-                            ],
+                              ),],
                           ),
                         ),
                       );
@@ -272,6 +284,94 @@ class _AiScannerReviewDialogState extends ConsumerState<AiScannerReviewDialog> {
           ],
         ),
       ),
+    );
+  }
+  // 🌟 全新的搜索关联弹窗（彻底解决下拉框难用的问题）
+  void _showSearchableSelect(int itemIndex, List<Ingredient> inventory) {
+    String searchQuery = '';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            // 模糊搜索逻辑：只要名字里包含输入的字就能搜出来
+            final filteredList = inventory.where((ing) => 
+              ing.name.toLowerCase().contains(searchQuery.toLowerCase())
+            ).toList();
+
+            return AlertDialog(
+              title: const Text('选择关联食材', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              contentPadding: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400, // 给列表一个固定的最大高度
+                child: Column(
+                  children: [
+                    // 搜索框
+                    TextField(
+                      autofocus: true, // 弹出来自动弹出键盘
+                      decoration: InputDecoration(
+                        hintText: '搜索现有食材...',
+                        prefixIcon: const Icon(Icons.search, color: Colors.teal),
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                      onChanged: (val) {
+                        setModalState(() => searchQuery = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    // 搜索结果列表
+                    Expanded(
+                      child: ListView(
+                        children: [
+                          // 永远置顶的“作为新食材”选项
+                          ListTile(
+                            leading: const Icon(Icons.add_circle_outline, color: Colors.orange),
+                            title: const Text('✨ 作为新食材入库 (不合并)', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                            onTap: () {
+                              setState(() {
+                                _editableItems[itemIndex]['matchedIngredientId'] = null;
+                              });
+                              Navigator.pop(context);
+                            },
+                          ),
+                          const Divider(),
+                          if (filteredList.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Center(child: Text('未找到匹配的食材', style: TextStyle(color: Colors.grey))),
+                            ),
+                          // 渲染搜索结果
+                          ...filteredList.map((ing) => ListTile(
+                            leading: const Icon(Icons.kitchen, color: Colors.teal),
+                            title: Text('🔗 合并至: ${ing.name}', style: const TextStyle(fontWeight: FontWeight.w500)),
+                            // 贴心地显示一下当前的库存状态
+                            subtitle: Text(
+                              ing.inStock ? '当前有库存' : '当前缺货', 
+                              style: TextStyle(fontSize: 12, color: ing.inStock ? Colors.grey : Colors.red)
+                            ),
+                            onTap: () {
+                              setState(() {
+                                _editableItems[itemIndex]['matchedIngredientId'] = ing.id;
+                              });
+                              Navigator.pop(context); // 选完自动关闭小弹窗
+                            },
+                          )),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              ),
+            );
+          }
+        );
+      }
     );
   }
 }
