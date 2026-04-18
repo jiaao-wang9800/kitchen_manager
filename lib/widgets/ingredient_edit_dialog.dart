@@ -9,7 +9,15 @@ class IngredientEditDialog extends ConsumerStatefulWidget {
   final Ingredient? existingIngredient;
   final String? defaultCategoryId;
 
-  const IngredientEditDialog({super.key, this.existingIngredient, this.defaultCategoryId});
+  // 🌟 新增这一行：允许外部拦截保存动作
+  final void Function(Ingredient)? onSaveOverride;
+
+  const IngredientEditDialog({
+    super.key, 
+    this.existingIngredient, 
+    this.defaultCategoryId,
+    this.onSaveOverride, // 🌟 新增
+  });
 
   @override
   ConsumerState<IngredientEditDialog> createState() => _IngredientEditDialogState();
@@ -437,6 +445,31 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
     double? parsedAmt = double.tryParse(amountController.text);
     final inputName = nameController.text.trim();
     String currentIngId = widget.existingIngredient?.id ?? generateId();
+
+
+    // 🌟🌟🌟 新增的核心拦截逻辑：在这里拦截，阻止直接写库 🌟🌟🌟
+    if (widget.onSaveOverride != null) {
+      final updatedIng = Ingredient(
+        id: currentIngId,
+        name: inputName,
+        categoryId: selectedCategoryId!,
+        numericAmount: parsedAmt,
+        unit: selectedUnit,
+        expirationDate: selectedExpirationDate,
+        inStock: true,
+        // 继承原有的营养数据（防止编辑时把 AI 算出来的营养丢失）
+        dietaryGroup: widget.existingIngredient?.dietaryGroup,
+        nutritionalTags: widget.existingIngredient?.nutritionalTags,
+        dietarySubGroup: widget.existingIngredient?.dietarySubGroup,
+        caloriesPer100g: widget.existingIngredient?.caloriesPer100g,
+        proteinPer100g: widget.existingIngredient?.proteinPer100g,
+        carbsPer100g: widget.existingIngredient?.carbsPer100g,
+        fatPer100g: widget.existingIngredient?.fatPer100g,
+      );
+      widget.onSaveOverride!(updatedIng);
+      return; // ⛔️ 关键：直接 return，绝不执行下面的真实写库和菜谱关联操作
+    }
+    // 🌟🌟🌟 拦截逻辑结束 🌟🌟🌟
     
     // 1. 保存/合并食材
     if (widget.existingIngredient != null) {

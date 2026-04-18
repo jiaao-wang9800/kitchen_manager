@@ -7,6 +7,7 @@ import '../data/mock_database.dart'; // 仅保留用于 generateId
 import '../services/ai_scanner_service.dart';
 import '../providers/kitchen_provider.dart';
 import '../providers/cart_provider.dart';
+import '../widgets/ai_scanner_review_dialog.dart';
 
 class ShoppingCartScreen extends ConsumerStatefulWidget {
   const ShoppingCartScreen({super.key});
@@ -18,7 +19,7 @@ class ShoppingCartScreen extends ConsumerStatefulWidget {
 class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
   bool _isScanning = false;
 
-  // ==========================================
+// ==========================================
   // 🌟 Smart AI Scanner Logic (Riverpod Powered)
   // ==========================================
   Future<void> _scanReceipt() async {
@@ -35,120 +36,27 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
       final allCategories = ref.read(categoryProvider);
       final results = await ReceiptScannerService.scanGroceries(bytes, categories: allCategories);
       
+      setState(() => _isScanning = false); // 扫描完成，关闭 loading 蒙层
+
       if (results.isEmpty) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未能识别到食材，请换一张清晰的照片试试。')));
         return;
       }
 
-      int processedCount = 0;
-      int matchedCartCount = 0;
-
-      // 获取当前的库存和购物车快照
-      final inventoryNotifier = ref.read(inventoryProvider.notifier);
-      final currentInventory = ref.read(inventoryProvider);
-      final cartNotifier = ref.read(cartProvider.notifier);
-      final currentCart = ref.read(cartProvider);
-
-      // 2. Process each AI-detected ingredient
-      for (var item in results) {
-        final name = item['name'] as String;
-        final amount = item['amount'] as double;
-        final unit = item['unit'] as String;
-        final group = item['group'] as DietaryGroup;
-        final shelfLifeDays = item['shelfLifeDays'] as int;
-        final aiCategoryId = item['categoryId'] as String?;
-
-        // 2.1: Smart Inventory Update
-        var existingIng = currentInventory.where((i) => 
-          i.name.toLowerCase() == name.toLowerCase() || 
-          i.name.contains(name) || 
-          name.contains(i.name)
-        ).firstOrNull;
-        
-        String targetIngId;
-
-        if (existingIng != null) {
-          existingIng.inStock = true;
-          existingIng.numericAmount = (existingIng.numericAmount ?? 0) + amount;
-          existingIng.unit = unit; 
-          existingIng.dietaryGroup = group;
-          existingIng.dietarySubGroup = item['subGroup'];
-          existingIng.caloriesPer100g = item['cal'];
-          existingIng.proteinPer100g = item['pro'];
-          existingIng.carbsPer100g = item['carb'];
-          existingIng.fatPer100g = item['fat'];
-          existingIng.nutritionalTags = item['tags'];
-          existingIng.expirationDate = DateTime.now().add(Duration(days: shelfLifeDays));
-          existingIng.isAiAnalyzing = false;
-          
-          await inventoryNotifier.addOrUpdateIngredient(existingIng); // 🌟 使用 Riverpod 更新
-          targetIngId = existingIng.id;
-        } else {
-          final finalCategoryId = (aiCategoryId != null && allCategories.any((c) => c.id == aiCategoryId)) 
-              ? aiCategoryId 
-              : (allCategories.firstOrNull?.id ?? 'default');
-
-          final newIng = Ingredient(
-            id: generateId(),
-            name: name,
-            categoryId: finalCategoryId, 
-            inStock: true,
-            numericAmount: amount,
-            unit: unit, 
-            dietaryGroup: group,
-            dietarySubGroup: item['subGroup'],
-            caloriesPer100g: item['cal'],
-            proteinPer100g: item['pro'],
-            carbsPer100g: item['carb'],
-            fatPer100g: item['fat'],
-            nutritionalTags: item['tags'],
-            expirationDate: DateTime.now().add(Duration(days: shelfLifeDays)),
-            isAiAnalyzing: false, 
-          );
-          
-          await inventoryNotifier.addOrUpdateIngredient(newIng); // 🌟 使用 Riverpod 更新
-          targetIngId = newIng.id;
-        }
-        
-        processedCount++;
-
-        // 2.2: Smart Cart Clear (Fuzzy match with unpurchased items)
-        final unpurchasedCartItems = currentCart.where((i) => !i.isPurchased).toList();
-        for (var cartItem in unpurchasedCartItems) {
-          // 由于我们在上一步可能新增了食材，最好实时去源数据里查一次
-          final cartIng = ref.read(inventoryProvider).where((i) => i.id == cartItem.ingredientId).firstOrNull;
-          if (cartIng != null) {
-            if (cartIng.id == targetIngId || cartIng.name.contains(name) || name.contains(cartIng.name)) {
-              cartItem.isPurchased = true; 
-              cartIng.inStock = true;
-              
-              await cartNotifier.addOrUpdateItem(cartItem); // 🌟 使用 Riverpod 更新购物车
-              await inventoryNotifier.addOrUpdateIngredient(cartIng); // 🌟 同步更新库存状态
-              
-              matchedCartCount++;
-            }
-          }
-        }
-      }
-
-      // 3. UI 刷新由 Riverpod 自动接管，这里只需显示提示
+      // 🌟 核心拦截：唤出核对弹窗，后续的入库逻辑全交由弹窗内部处理
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 扫描完成！入库 $processedCount 项食材，自动划去购物车 $matchedCartCount 项！'),
-            backgroundColor: Colors.teal,
-            duration: const Duration(seconds: 4),
-          )
+        showDialog(
+          context: context,
+          barrierDismissible: false, // 强制用户必须点击按钮关闭，防止误触消失
+          builder: (context) => AiScannerReviewDialog(scannedItems: results),
         );
       }
 
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('扫描失败: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red));
-    } finally {
       setState(() => _isScanning = false);
-    }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('扫描失败: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red));
+    } 
   }
-
   @override
   Widget build(BuildContext context) {
     // 🌟 全局监听购物车和库存
