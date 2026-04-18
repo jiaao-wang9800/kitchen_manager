@@ -8,7 +8,10 @@ import '../widgets/ingredient_edit_dialog.dart';
 import '../main.dart'; // for isStardewTheme
 import 'matched_recipes_screen.dart';
 import '../widgets/ingredient_card.dart';
-import '../data/mock_database.dart';
+
+// 🌟 引入刚刚拆分出来的两个新组件
+import '../widgets/add_category_dialog.dart';
+import '../widgets/inventory_location_bar.dart';
 
 class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
@@ -21,11 +24,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   StorageLocation _selectedLocation = StorageLocation.fridge;
   String? _selectedCategoryId;
 
-  // 🌟 新增：联动滚动所需的核心控制器与字典
+  // 🌟 双向联动所需的核心控制器与字典
   final ScrollController _leftScrollController = ScrollController();
   final ScrollController _rightScrollController = ScrollController();
   final Map<String, GlobalKey> _categoryKeys = {};
-  bool _isManualScrolling = false; // 防冲突锁
+  bool _isManualScrolling = false; 
 
   @override
   void dispose() {
@@ -34,6 +37,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     super.dispose();
   }
 
+  // 呼出食材编辑/新增弹窗
   void _showIngredientDialog({Ingredient? existingIngredient, String? defaultCategoryId}) {
     showModalBottomSheet(
       context: context,
@@ -46,63 +50,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
-  void _showAddCategoryDialog(BuildContext context, StorageLocation currentLocation) {
-    final TextEditingController nameController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('在【${currentLocation.displayName}】添加新分类', style: const TextStyle(fontSize: 16)),
-          content: TextField(
-            controller: nameController,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: '例如：水果、甜品...',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10C07B),
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isNotEmpty) {
-                  final newCategory = IngredientCategory(
-                    id: generateId(), 
-                    name: name,
-                    location: currentLocation,
-                  );
-                  await categoryBox.put(newCategory.id, newCategory);
-                  ref.invalidate(categoryProvider);
-
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    setState(() {
-                      _selectedCategoryId = newCategory.id;
-                    });
-                  }
-                }
-              },
-              child: const Text('添加'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // 🌟 核心逻辑 1：滑动右侧时，反向计算并更新左侧菜单
+  // 核心逻辑 1：滑动右侧时，反向计算并更新左侧菜单
   void _syncLeftMenu(List<IngredientCategory> categories) {
     String? activeCategoryId;
 
@@ -112,15 +60,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         final RenderBox box = key.currentContext!.findRenderObject() as RenderBox;
         final offset = box.localToGlobal(Offset.zero).dy;
 
-        // 设置一条隐形的判定线（距离屏幕顶部 250 像素）。
-        // 最后一个越过判定线的分类，就是当前视觉上占据主要位置的分类。
         if (offset < 250) {
           activeCategoryId = cat.id;
         }
       }
     }
 
-    // 容错：如果都在判定线下方（说明是第一个分类），就选中第一个
     if (activeCategoryId == null && categories.isNotEmpty) {
       activeCategoryId = categories.first.id;
     }
@@ -129,12 +74,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       setState(() {
         _selectedCategoryId = activeCategoryId;
       });
-      // 联动：让左侧菜单也微微滚动，保持高亮项在中间
       _scrollToCenterLeftMenu(categories, activeCategoryId);
     }
   }
 
-  // 🌟 核心逻辑 2：让左边菜单自动滚动，把选中的项保持在垂直居中的位置
+  // 核心逻辑 2：让左边菜单自动微调滚动，保持垂直居中
   void _scrollToCenterLeftMenu(List<IngredientCategory> categories, String catId) {
     if (!_leftScrollController.hasClients) return;
     
@@ -144,7 +88,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     const itemHeight = 60.0;
     final targetOffset = index * itemHeight;
     final viewportHeight = _leftScrollController.position.viewportDimension;
-    // 计算居中偏移量
     final offset = targetOffset - (viewportHeight / 2) + (itemHeight / 2);
 
     _leftScrollController.animateTo(
@@ -185,7 +128,16 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             IconButton(
               icon: const Icon(Icons.create_new_folder_outlined, color: Color(0xFF10C07B)), 
               tooltip: '新增分类',
-              onPressed: () => _showAddCategoryDialog(context, _selectedLocation),
+              // 🌟 调用抽离后的新增分类弹窗
+              onPressed: () => showDialog(
+                context: context,
+                builder: (context) => AddCategoryDialog(
+                  currentLocation: _selectedLocation,
+                  onCategoryAdded: (newCategoryId) {
+                    setState(() => _selectedCategoryId = newCategoryId);
+                  },
+                ),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.bolt, color: Colors.orangeAccent), 
@@ -210,8 +162,22 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         ),  
         body: Column(
           children: [
-            _buildTopLocationBar(),
+            // 🌟 引入抽离后的位置切换栏
+            InventoryLocationBar(
+              selectedLocation: _selectedLocation,
+              onLocationChanged: (newLocation) {
+                setState(() {
+                  _selectedLocation = newLocation;
+                  _selectedCategoryId = null; 
+                });
+                if (_rightScrollController.hasClients) {
+                  _rightScrollController.jumpTo(0);
+                }
+              },
+            ),
             const Divider(height: 1, color: Color(0xFFEEEEEE)),
+            
+            // 下半部分：左右联动的核心视图
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,63 +200,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
-  Widget _buildTopLocationBar() {
-    return Container(
-      height: 50,
-      color: Colors.white,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: StorageLocation.values.length,
-        itemBuilder: (context, index) {
-          final loc = StorageLocation.values[index];
-          final isSelected = loc == _selectedLocation;
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedLocation = loc;
-                _selectedCategoryId = null; 
-              });
-              // 🌟 切换大区域时，右侧列表主动复位到顶部
-              if (_rightScrollController.hasClients) {
-                _rightScrollController.jumpTo(0);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    loc.displayName,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade600,
-                    ),
-                  ),
-                  if (isSelected)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      height: 3,
-                      width: 24,
-                      decoration: BoxDecoration(color: const Color(0xFF10C07B), borderRadius: BorderRadius.circular(2)),
-                    )
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
+  // ============== 局部组件：左侧菜单 ==============
   Widget _buildLeftCategoryMenu(List<IngredientCategory> categories) {
     return Container(
       width: 90,
       color: const Color(0xFFF5F5F5),
       child: ListView.builder(
-        controller: _leftScrollController, // 🌟 挂载左侧控制器
+        controller: _leftScrollController, 
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final cat = categories[index];
@@ -299,20 +215,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           return GestureDetector(
             onTap: () async {
               setState(() => _selectedCategoryId = cat.id);
-              _scrollToCenterLeftMenu(categories, cat.id); // 点自己的时候也稍微居中一下
+              _scrollToCenterLeftMenu(categories, cat.id); 
               
-              // 🌟 核心逻辑 3：点击左边，右边自动滚动到对应物理位置
+              // 核心逻辑 3：点左边，右边滚动
               final key = _categoryKeys[cat.id];
               if (key != null && key.currentContext != null) {
-                _isManualScrolling = true; // 上锁，防止触发双向滑动死循环
+                _isManualScrolling = true; 
                 await Scrollable.ensureVisible(
                   key.currentContext!,
                   duration: const Duration(milliseconds: 350),
                   curve: Curves.easeInOut,
-                  alignment: 0.0, // 滚动到可见区域的最顶部
+                  alignment: 0.0, 
                 );
-                await Future.delayed(const Duration(milliseconds: 100)); // 给个微小的缓冲时间
-                _isManualScrolling = false; // 解锁
+                await Future.delayed(const Duration(milliseconds: 100));
+                _isManualScrolling = false; 
               }
             },
             child: Container(
@@ -338,24 +254,22 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
+  // ============== 局部组件：右侧内容 ==============
   Widget _buildRightContentArea(List<IngredientCategory> categories, List<Ingredient> myInventory) {
     if (categories.isEmpty) return const Center(child: Text('此位置暂无分类', style: TextStyle(color: Colors.grey)));
 
-    // 🌟 为了能让 GlobalKey 正确绑定并测算所有元素，这里将 ListView.builder 替换为 SingleChildScrollView + Column
     return NotificationListener<ScrollNotification>(
       onNotification: (scrollInfo) {
-        // 只有当不是我们主动点击左侧触发的滚动，而是用户实实在在滑动右侧时，才进行反向计算
         if (!_isManualScrolling && scrollInfo is ScrollUpdateNotification) {
           _syncLeftMenu(categories);
         }
         return false;
       },
       child: SingleChildScrollView(
-        controller: _rightScrollController, // 🌟 挂载右侧控制器
+        controller: _rightScrollController, 
         padding: const EdgeInsets.all(12),
         child: Column(
           children: categories.map((cat) {
-            // 为每个分类自动生成并复用唯一的 GlobalKey
             _categoryKeys.putIfAbsent(cat.id, () => GlobalKey());
             final catKey = _categoryKeys[cat.id]!;
 
@@ -368,7 +282,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             });
 
             return Column(
-              key: catKey, // 🌟 挂载！这相当于给每个分类贴上了定位追踪器
+              key: catKey, // 挂载定位器
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
