@@ -1,6 +1,7 @@
 // lib/data/mock_database.dart
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/app_models.dart';
+import 'my_initial_inventory.dart';
 
 // Global variables for UI to read from (Memory Cache)
 List<IngredientCategory> allCategories = [];
@@ -48,6 +49,7 @@ Future<void> _seedInitialData() async {
     IngredientCategory(id: 'cat_f1', name: '鲜肉', location: StorageLocation.fridge),
     IngredientCategory(id: 'cat_f2', name: '鸡蛋&乳制品', location: StorageLocation.fridge),
     IngredientCategory(id: 'cat_f3', name: '蔬菜', location: StorageLocation.fridge),
+    IngredientCategory(id: 'cat_f4', name: '葱姜蒜', location: StorageLocation.fridge),
     IngredientCategory(id: 'cat_fz1', name: '快手早餐', location: StorageLocation.freezer),
     IngredientCategory(id: 'cat_fz2', name: '丸子', location: StorageLocation.freezer),
     IngredientCategory(id: 'cat_fz3', name: '海鲜', location: StorageLocation.freezer),
@@ -64,7 +66,9 @@ Future<void> _seedInitialData() async {
     IngredientCategory(id: 'cat_s3', name: '基础调味料', location: StorageLocation.spices),
     IngredientCategory(id: 'cat_s4', name: '复合调味包', location: StorageLocation.spices),
     IngredientCategory(id: 'cat_p1', name: '果汁饮料', location: StorageLocation.pantry),
-    IngredientCategory(id: 'cat_p2', name: '茶', location: StorageLocation.pantry),
+    IngredientCategory(id: 'cat_p2', name: '茶/咖啡', location: StorageLocation.pantry),
+    IngredientCategory(id: 'cat_p3', name: '坚果', location: StorageLocation.pantry),
+    IngredientCategory(id: 'cat_p4', name: '甜品', location: StorageLocation.pantry),
 
   ];
 
@@ -132,7 +136,23 @@ Future<void> _seedInitialData() async {
   );
 
   await recipeBox.put(defaultRecipe.id, defaultRecipe);
+
+  // =====================================
+  // 🌟 2. 在这里加上：灌入你的私人初始食材！
+  // =====================================
+  for (var item in myInitialInventory) {
+    
+    // 检查：遍历当前数据库里的所有食材，看看有没有名字一模一样的
+    bool alreadyHasSameName = inventoryBox.values.any((existing) => existing.name == item.name);
+    
+    // 只有当数据库里“没有这个名字”的食材时，我才加进去
+    if (!alreadyHasSameName) {
+      await inventoryBox.put(item.id, item);
+    }
+  }
 }
+
+  // 顺便更新旧的全局变量，防止其他尚未迁移的页面报错
 
 String generateId() => DateTime.now().millisecondsSinceEpoch.toString();
 
