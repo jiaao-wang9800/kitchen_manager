@@ -8,6 +8,7 @@ import '../widgets/ingredient_edit_dialog.dart';
 import '../main.dart'; // for isStardewTheme
 import 'matched_recipes_screen.dart'; // 👈 新增导入
 import '../widgets/ingredient_card.dart';
+import '../data/mock_database.dart';
 
 class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
@@ -32,6 +33,69 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
+// 🌟 新增：动态添加分类的弹窗
+  void _showAddCategoryDialog(BuildContext context, StorageLocation currentLocation) {
+    final TextEditingController nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('在【${currentLocation.displayName}】添加新分类', style: const TextStyle(fontSize: 16)),
+          content: TextField(
+            controller: nameController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: '例如：水果、甜品...',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10C07B), // 你的主题绿
+                foregroundColor: Colors.white,
+                elevation: 0,
+              ),
+              onPressed: () async {
+                final name = nameController.text.trim();
+                if (name.isNotEmpty) {
+                  // 1. 构建新的分类对象
+                  final newCategory = IngredientCategory(
+                    id: generateId(), 
+                    name: name,
+                    location: currentLocation,
+                  );
+
+                  // 2. 存入物理数据库
+                  await categoryBox.put(newCategory.id, newCategory);
+
+                  // 3. 刷新 Riverpod 状态 (让 UI 重新拉取最新数据)
+                  ref.invalidate(categoryProvider);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    // 🌟 贴心细节：添加完成后，自动帮用户选中这个新分类
+                    setState(() {
+                      _selectedCategoryId = newCategory.id;
+                    });
+                  }
+                }
+              },
+              child: const Text('添加'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // 监听 Riverpod 数据源，替代旧的全局变量！
@@ -39,6 +103,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final myInventory = ref.watch(inventoryProvider);
 
     final locationCategories = allCategories.where((c) => c.location == _selectedLocation).toList();
+
+    // 🌟 2. 新增排序逻辑：让新加的分类永远在最下面
+    locationCategories.sort((a, b) {
+      // 识别是不是默认分类（因为我们的默认分类都是 'cat_' 开头的）
+      final aIsDefault = a.id.startsWith('cat_');
+      final bIsDefault = b.id.startsWith('cat_');
+      
+      if (aIsDefault && !bIsDefault) return -1; // a 是默认，b 是新增，a 排在前面
+      if (!aIsDefault && bIsDefault) return 1;  // b 是默认，a 是新增，b 排在前面
+      
+      // 如果都是新增的，或者都是默认的，就按它们自己的名字或 ID 排
+      return a.id.compareTo(b.id); 
+    });
     
     // 自动选中当前位置的第一个分类
     if (_selectedCategoryId == null && locationCategories.isNotEmpty) {
@@ -54,6 +131,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           title: const Text('My Kitchen', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
           iconTheme: const IconThemeData(color: Colors.black87),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.create_new_folder_outlined, color: Color(0xFF10C07B)), 
+              tooltip: '新增分类',
+              onPressed: () => _showAddCategoryDialog(context, _selectedLocation),
+            ),
             IconButton(
               icon: const Icon(Icons.bolt, color: Colors.orangeAccent), 
               tooltip: '一键刷新营养成分', 
@@ -193,6 +275,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         },
       ),
     );
+
+    
   }
 
   Widget _buildRightContentArea(List<IngredientCategory> categories, List<Ingredient> myInventory) {
