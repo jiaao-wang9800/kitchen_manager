@@ -76,136 +76,154 @@ class IngredientCard extends ConsumerWidget {
     bool isExpired = ingredient.expirationDate != null && ingredient.expirationDate!.isBefore(DateTime.now());
     bool isOutOfStock = !ingredient.inStock;
     
-    return Opacity(
+return Opacity(
       opacity: isOutOfStock ? 0.4 : 1.0, 
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(color: const Color(0xFFF8F9FA), borderRadius: BorderRadius.circular(12)),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          leading: CircleAvatar(backgroundColor: Colors.white, child: Icon(Icons.kitchen, color: Colors.grey.shade400)),
-          // 🌟 核心修改：将标题升级为 Row，把名字和状态放在同一行
-          title: Row(
-            crossAxisAlignment: CrossAxisAlignment.center, // 垂直居中对齐
-            children: [
-              // 1. 食材名字 (使用 Flexible 保证名字太长时会自动省略，不会把右边的状态挤出屏幕)
-              Flexible(
-                child: Text(
-                  ingredient.name, 
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8), // 名字和状态之间的间距
-              
-              // 2. 状态信息跟在后面
-              if (isOutOfStock)
-                const Text('缺货', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold))
-              else
-                Wrap(
-                  spacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (ingredient.numericAmount != null)
-                      Text(
-                        'Qty: ${ingredient.numericAmount == ingredient.numericAmount!.truncateToDouble() ? ingredient.numericAmount!.toInt() : ingredient.numericAmount}${ingredient.unit ?? ''}', 
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500)
-                      ),
-                    if (ingredient.expirationDate != null)
-                      Text(
-                        'Exp: ${ingredient.expirationDate!.toLocal().toString().split(' ')[0]}', 
-                        style: TextStyle(
-                          fontSize: 12, 
-                          color: isExpired ? Colors.red : Colors.grey.shade500, 
-                          fontWeight: isExpired ? FontWeight.bold : FontWeight.normal
-                        )
-                      ),
-                  ],
-                ),
-            ],
-          ),
-          
-// 🌟 修复副标题：加入 AI 思考动画，并完美恢复橙色(大类) + 绿色(营养亮点)的双色标签组合
-          subtitle: ingredient.isAiAnalyzing
-            ? const Padding(
-                padding: EdgeInsets.only(top: 6.0),
-                child: Row(
-                  children: [
-                    SizedBox(height: 12, width: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange)),
-                    SizedBox(width: 8),
-                    Text('AI 营养分析中...', style: TextStyle(fontSize: 10, color: Colors.orange)),
-                  ],
-                ),
-              )
-            : Builder(
-                builder: (context) {
-                  List<Widget> tags = [];
-
-                  // 1. 橙色标签：膳食宝塔分类
-                  if (ingredient.dietaryGroup != null) {
-                    tags.add(
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.orange.shade200)),
-                        child: Text(
-                          ingredient.dietaryGroup!.displayName, 
-                          style: TextStyle(fontSize: 10, color: Colors.orange.shade700, fontWeight: FontWeight.bold)
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA), 
+          borderRadius: BorderRadius.circular(12),
+        ),
+        // 🌟 核心升级：用 Material + InkWell 替代 ListTile，保留点击水波纹效果，但打破高度限制
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => MatchedRecipesScreen(ingredient: ingredient)));
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center, // 左右两边垂直居中对齐
+                children: [
+                  // =====================================
+                  // 左侧：信息展示区 (利用 Expanded 自动占满剩余空间)
+                  // =====================================
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. 标题行
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                ingredient.name, 
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isOutOfStock) ...[
+                              const SizedBox(width: 8),
+                              const Text('缺货', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
+                            ]
+                          ],
                         ),
-                      )
-                    );
-                  }
-
-                  // 2. 绿色标签：AI 营养特色 (例如高蛋白、低GI等)，最多显示2个以保持UI不拥挤
-                  if (ingredient.nutritionalTags != null && ingredient.nutritionalTags!.isNotEmpty) {
-                    for (var tag in ingredient.nutritionalTags!.take(2)) {
-                      tags.add(
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.green.shade200)),
-                          child: Text(
-                            tag, 
-                            style: TextStyle(fontSize: 10, color: Colors.green.shade700, fontWeight: FontWeight.bold)
+                        
+                        // 2. 副标题（数量保质期 + 标签）
+                        if (!isOutOfStock && (ingredient.numericAmount != null || ingredient.expirationDate != null))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Wrap(
+                              spacing: 12,
+                              children: [
+                                if (ingredient.numericAmount != null)
+                                  Text(
+                                    'Qty: ${ingredient.numericAmount == ingredient.numericAmount!.truncateToDouble() ? ingredient.numericAmount!.toInt() : ingredient.numericAmount}${ingredient.unit ?? ''}', 
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600)
+                                  ),
+                                if (ingredient.expirationDate != null)
+                                  Text(
+                                    'Exp: ${ingredient.expirationDate!.toLocal().toString().split(' ')[0]}', 
+                                    style: TextStyle(
+                                      fontSize: 12, 
+                                      color: isExpired ? Colors.red : Colors.grey.shade600, 
+                                      fontWeight: isExpired ? FontWeight.bold : FontWeight.normal
+                                    )
+                                  ),
+                              ],
+                            ),
                           ),
-                        )
-                      );
-                    }
-                  }
 
-                  if (tags.isEmpty) return const SizedBox.shrink();
-
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6.0),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: tags,
+                        // 3. AI 动画 或 营养标签
+                        if (ingredient.isAiAnalyzing)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6.0),
+                            child: Row(
+                              children: [
+                                SizedBox(height: 12, width: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange)),
+                                SizedBox(width: 8),
+                                Text('AI 营养分析中...', style: TextStyle(fontSize: 10, color: Colors.orange)),
+                              ],
+                            ),
+                          )
+                        else 
+                          Builder(
+                            builder: (context) {
+                              List<Widget> tags = [];
+                              if (ingredient.dietaryGroup != null) {
+                                tags.add(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.orange.shade200)),
+                                    child: Text(ingredient.dietaryGroup!.displayName, style: TextStyle(fontSize: 10, color: Colors.orange.shade700, fontWeight: FontWeight.bold)),
+                                  )
+                                );
+                              }
+                              if (ingredient.nutritionalTags != null && ingredient.nutritionalTags!.isNotEmpty) {
+                                for (var tag in ingredient.nutritionalTags!.take(2)) {
+                                  tags.add(
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.green.shade200)),
+                                      child: Text(tag, style: TextStyle(fontSize: 10, color: Colors.green.shade700, fontWeight: FontWeight.bold)),
+                                    )
+                                  );
+                                }
+                              }
+                              if (tags.isEmpty) return const SizedBox.shrink();
+                              return Padding(padding: const EdgeInsets.only(top: 6.0), child: Wrap(spacing: 6, runSpacing: 4, children: tags));
+                            },
+                          ),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                  
+                  const SizedBox(width: 12), // 左右两块区域的呼吸空间
+                  
+                  // =====================================
+                  // 右侧：操作按钮区 (彻底解脱高度限制)
+                  // =====================================
+                  Column(
+                    mainAxisSize: MainAxisSize.min, // 高度包裹内容
+                    children: [
+                      if (!isOutOfStock) ...[
+                        // 🌟 使用 InkWell 手动捏按钮，去掉 IconButton 默认死板的内边距
+                        InkWell(
+                          onTap: () => _confirmConsume(context, ref),
+                          borderRadius: BorderRadius.circular(20),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6.0),
+                            child: Icon(Icons.check_circle_outline, color: Colors.teal, size: 22),
+                          ),
+                        ),
+                        const SizedBox(height: 8), // 两个按钮上下隔开一点距离
+                      ],
+                      InkWell(
+                        onTap: () => _showEditDialog(context),
+                        borderRadius: BorderRadius.circular(20),
+                        child: const Padding(
+                          padding: EdgeInsets.all(6.0),
+                          child: Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 22),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              
-          onTap: () {
-            Navigator.push(
-              context, 
-              MaterialPageRoute(builder: (context) => MatchedRecipesScreen(ingredient: ingredient))
-            );
-          },
-          
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!isOutOfStock)
-                IconButton(
-                  icon: const Icon(Icons.check_circle_outline, color: Colors.teal, size: 22), 
-                  tooltip: '标记为吃完/用完',
-                  // 🌟 触发我们刚刚写好的询问弹窗
-                  onPressed: () => _confirmConsume(context, ref)
-                ),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 22), 
-                onPressed: () => _showEditDialog(context)
-              ),
-            ],
+            ),
           ),
         ),
       ),

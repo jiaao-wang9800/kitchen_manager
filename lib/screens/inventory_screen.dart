@@ -6,7 +6,7 @@ import '../providers/kitchen_provider.dart';
 import '../widgets/stardew_panel.dart';
 import '../widgets/ingredient_edit_dialog.dart';
 import '../main.dart'; // for isStardewTheme
-import 'matched_recipes_screen.dart'; // 👈 新增导入
+import 'matched_recipes_screen.dart';
 import '../widgets/ingredient_card.dart';
 import '../data/mock_database.dart';
 
@@ -21,6 +21,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   StorageLocation _selectedLocation = StorageLocation.fridge;
   String? _selectedCategoryId;
 
+  // 🌟 新增：联动滚动所需的核心控制器与字典
+  final ScrollController _leftScrollController = ScrollController();
+  final ScrollController _rightScrollController = ScrollController();
+  final Map<String, GlobalKey> _categoryKeys = {};
+  bool _isManualScrolling = false; // 防冲突锁
+
+  @override
+  void dispose() {
+    _leftScrollController.dispose();
+    _rightScrollController.dispose();
+    super.dispose();
+  }
+
   void _showIngredientDialog({Ingredient? existingIngredient, String? defaultCategoryId}) {
     showModalBottomSheet(
       context: context,
@@ -33,7 +46,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
-// 🌟 新增：动态添加分类的弹窗
   void _showAddCategoryDialog(BuildContext context, StorageLocation currentLocation) {
     final TextEditingController nameController = TextEditingController();
 
@@ -59,29 +71,23 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10C07B), // 你的主题绿
+                backgroundColor: const Color(0xFF10C07B),
                 foregroundColor: Colors.white,
                 elevation: 0,
               ),
               onPressed: () async {
                 final name = nameController.text.trim();
                 if (name.isNotEmpty) {
-                  // 1. 构建新的分类对象
                   final newCategory = IngredientCategory(
                     id: generateId(), 
                     name: name,
                     location: currentLocation,
                   );
-
-                  // 2. 存入物理数据库
                   await categoryBox.put(newCategory.id, newCategory);
-
-                  // 3. 刷新 Riverpod 状态 (让 UI 重新拉取最新数据)
                   ref.invalidate(categoryProvider);
 
                   if (context.mounted) {
                     Navigator.pop(context);
-                    // 🌟 贴心细节：添加完成后，自动帮用户选中这个新分类
                     setState(() {
                       _selectedCategoryId = newCategory.id;
                     });
@@ -96,35 +102,80 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
+  // 🌟 核心逻辑 1：滑动右侧时，反向计算并更新左侧菜单
+  void _syncLeftMenu(List<IngredientCategory> categories) {
+    String? activeCategoryId;
+
+    for (var cat in categories) {
+      final key = _categoryKeys[cat.id];
+      if (key != null && key.currentContext != null) {
+        final RenderBox box = key.currentContext!.findRenderObject() as RenderBox;
+        final offset = box.localToGlobal(Offset.zero).dy;
+
+        // 设置一条隐形的判定线（距离屏幕顶部 250 像素）。
+        // 最后一个越过判定线的分类，就是当前视觉上占据主要位置的分类。
+        if (offset < 250) {
+          activeCategoryId = cat.id;
+        }
+      }
+    }
+
+    // 容错：如果都在判定线下方（说明是第一个分类），就选中第一个
+    if (activeCategoryId == null && categories.isNotEmpty) {
+      activeCategoryId = categories.first.id;
+    }
+
+    if (activeCategoryId != null && activeCategoryId != _selectedCategoryId) {
+      setState(() {
+        _selectedCategoryId = activeCategoryId;
+      });
+      // 联动：让左侧菜单也微微滚动，保持高亮项在中间
+      _scrollToCenterLeftMenu(categories, activeCategoryId);
+    }
+  }
+
+  // 🌟 核心逻辑 2：让左边菜单自动滚动，把选中的项保持在垂直居中的位置
+  void _scrollToCenterLeftMenu(List<IngredientCategory> categories, String catId) {
+    if (!_leftScrollController.hasClients) return;
+    
+    final index = categories.indexWhere((c) => c.id == catId);
+    if (index == -1) return;
+
+    const itemHeight = 60.0;
+    final targetOffset = index * itemHeight;
+    final viewportHeight = _leftScrollController.position.viewportDimension;
+    // 计算居中偏移量
+    final offset = targetOffset - (viewportHeight / 2) + (itemHeight / 2);
+
+    _leftScrollController.animateTo(
+      offset.clamp(0.0, _leftScrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 监听 Riverpod 数据源，替代旧的全局变量！
     final allCategories = ref.watch(categoryProvider);
     final myInventory = ref.watch(inventoryProvider);
 
     final locationCategories = allCategories.where((c) => c.location == _selectedLocation).toList();
 
-    // 🌟 2. 新增排序逻辑：让新加的分类永远在最下面
     locationCategories.sort((a, b) {
-      // 识别是不是默认分类（因为我们的默认分类都是 'cat_' 开头的）
       final aIsDefault = a.id.startsWith('cat_');
       final bIsDefault = b.id.startsWith('cat_');
-      
-      if (aIsDefault && !bIsDefault) return -1; // a 是默认，b 是新增，a 排在前面
-      if (!aIsDefault && bIsDefault) return 1;  // b 是默认，a 是新增，b 排在前面
-      
-      // 如果都是新增的，或者都是默认的，就按它们自己的名字或 ID 排
+      if (aIsDefault && !bIsDefault) return -1;
+      if (!aIsDefault && bIsDefault) return 1;
       return a.id.compareTo(b.id); 
     });
     
-    // 自动选中当前位置的第一个分类
     if (_selectedCategoryId == null && locationCategories.isNotEmpty) {
       _selectedCategoryId = locationCategories.first.id;
     }
 
     return StardewPanelContainer(
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8F9FA), // 现代简洁浅灰背景
+        backgroundColor: const Color(0xFFF8F9FA),
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0.5,
@@ -140,30 +191,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               icon: const Icon(Icons.bolt, color: Colors.orangeAccent), 
               tooltip: '一键刷新营养成分', 
               onPressed: () async {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('🤖 AI 正在分析库中食材，请稍候...'))
-                );
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🤖 AI 正在分析库中食材，请稍候...')));
                 try {
-                  // 🌟 呼叫 Riverpod 后台执行 AI 任务
                   final count = await ref.read(inventoryProvider.notifier).batchAnalyzeNutrition();
-                  
                   if (context.mounted) {
                     if (count > 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('✨ 成功为 $count 项食材匹配营养标签！'), backgroundColor: const Color(0xFF10C07B))
-                      );
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✨ 成功为 $count 项食材匹配营养标签！'), backgroundColor: const Color(0xFF10C07B)));
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('所有食材都已分析完毕，无需刷新啦 ✨'))
-                      );
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('所有食材都已分析完毕，无需刷新啦 ✨')));
                     }
                   }
                 } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('分析失败，请检查网络或 API 设置'), backgroundColor: Colors.red)
-                    );
-                  }
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('分析失败，请检查网络或 API 设置'), backgroundColor: Colors.red));
                 }
               },
             ),
@@ -185,7 +224,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           ],
         ),
         floatingActionButton: FloatingActionButton(
-          backgroundColor: const Color(0xFF10C07B), // 你的核心强调色
+          backgroundColor: const Color(0xFF10C07B),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), 
           elevation: 2,
           onPressed: () => _showIngredientDialog(),
@@ -209,8 +248,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             onTap: () {
               setState(() {
                 _selectedLocation = loc;
-                _selectedCategoryId = null; // 切换位置时重置选中的分类
+                _selectedCategoryId = null; 
               });
+              // 🌟 切换大区域时，右侧列表主动复位到顶部
+              if (_rightScrollController.hasClients) {
+                _rightScrollController.jumpTo(0);
+              }
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -223,7 +266,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade600, // 修改为绿色高亮
+                      color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade600,
                     ),
                   ),
                   if (isSelected)
@@ -247,13 +290,31 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       width: 90,
       color: const Color(0xFFF5F5F5),
       child: ListView.builder(
+        controller: _leftScrollController, // 🌟 挂载左侧控制器
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final cat = categories[index];
           final isSelected = cat.id == _selectedCategoryId;
           
           return GestureDetector(
-            onTap: () => setState(() => _selectedCategoryId = cat.id),
+            onTap: () async {
+              setState(() => _selectedCategoryId = cat.id);
+              _scrollToCenterLeftMenu(categories, cat.id); // 点自己的时候也稍微居中一下
+              
+              // 🌟 核心逻辑 3：点击左边，右边自动滚动到对应物理位置
+              final key = _categoryKeys[cat.id];
+              if (key != null && key.currentContext != null) {
+                _isManualScrolling = true; // 上锁，防止触发双向滑动死循环
+                await Scrollable.ensureVisible(
+                  key.currentContext!,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeInOut,
+                  alignment: 0.0, // 滚动到可见区域的最顶部
+                );
+                await Future.delayed(const Duration(milliseconds: 100)); // 给个微小的缓冲时间
+                _isManualScrolling = false; // 解锁
+              }
+            },
             child: Container(
               height: 60,
               decoration: BoxDecoration(
@@ -275,61 +336,71 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         },
       ),
     );
-
-    
   }
 
   Widget _buildRightContentArea(List<IngredientCategory> categories, List<Ingredient> myInventory) {
     if (categories.isEmpty) return const Center(child: Text('此位置暂无分类', style: TextStyle(color: Colors.grey)));
 
-    return Container(
-      color: Colors.white,
-      child: ListView.builder(
+    // 🌟 为了能让 GlobalKey 正确绑定并测算所有元素，这里将 ListView.builder 替换为 SingleChildScrollView + Column
+    return NotificationListener<ScrollNotification>(
+      onNotification: (scrollInfo) {
+        // 只有当不是我们主动点击左侧触发的滚动，而是用户实实在在滑动右侧时，才进行反向计算
+        if (!_isManualScrolling && scrollInfo is ScrollUpdateNotification) {
+          _syncLeftMenu(categories);
+        }
+        return false;
+      },
+      child: SingleChildScrollView(
+        controller: _rightScrollController, // 🌟 挂载右侧控制器
         padding: const EdgeInsets.all(12),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final cat = categories[index];
-          // 仅过滤当前分类下的食材
-          final ingredients = myInventory.where((i) => i.categoryId == cat.id).toList();
+        child: Column(
+          children: categories.map((cat) {
+            // 为每个分类自动生成并复用唯一的 GlobalKey
+            _categoryKeys.putIfAbsent(cat.id, () => GlobalKey());
+            final catKey = _categoryKeys[cat.id]!;
 
-          ingredients.sort((a, b) {
-            if (a.inStock && !b.inStock) return -1;
-            if (!a.inStock && b.inStock) return 1;
-            return a.name.compareTo(b.name); 
-          });
+            final ingredients = myInventory.where((i) => i.categoryId == cat.id).toList();
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0, bottom: 12.0),
-                child: Text(cat.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black45)),
-              ),
-              
-              if (ingredients.isEmpty)
+            ingredients.sort((a, b) {
+              if (a.inStock && !b.inStock) return -1;
+              if (!a.inStock && b.inStock) return 1;
+              return a.name.compareTo(b.name); 
+            });
+
+            return Column(
+              key: catKey, // 🌟 挂载！这相当于给每个分类贴上了定位追踪器
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 24.0),
-                  child: Text('还没有添加食材哦', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
-                )
-              else
-                ...ingredients.map((ing) => IngredientCard(ingredient: ing)),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 24.0, top: 4.0),
-                child: InkWell(
-                  onTap: () => _showIngredientDialog(defaultCategoryId: cat.id),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                    alignment: Alignment.center,
-                    child: Text('+ 添加到 ${cat.name}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                  ),
+                  padding: const EdgeInsets.only(top: 8.0, bottom: 12.0),
+                  child: Text(cat.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black45)),
                 ),
-              )
-            ],
-          );
-        },
+                
+                if (ingredients.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24.0),
+                    child: Text('还没有添加食材哦', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+                  )
+                else
+                  ...ingredients.map((ing) => IngredientCard(ingredient: ing)),
+                  
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24.0, top: 4.0),
+                  child: InkWell(
+                    onTap: () => _showIngredientDialog(defaultCategoryId: cat.id),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                      alignment: Alignment.center,
+                      child: Text('+ 添加到 ${cat.name}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                    ),
+                  ),
+                )
+              ],
+            );
+          }).toList(),
+        ),
       ),
     );
   }
-
 }
