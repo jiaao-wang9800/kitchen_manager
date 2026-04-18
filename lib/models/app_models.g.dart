@@ -361,6 +361,8 @@ class StorageLocationAdapter extends TypeAdapter<StorageLocation> {
         return StorageLocation.cupboard;
       case 3:
         return StorageLocation.spices;
+      case 4:
+        return StorageLocation.pantry;
       default:
         return StorageLocation.fridge;
     }
@@ -380,6 +382,9 @@ class StorageLocationAdapter extends TypeAdapter<StorageLocation> {
         break;
       case StorageLocation.spices:
         writer.writeByte(3);
+        break;
+      case StorageLocation.pantry:
+        writer.writeByte(4);
         break;
     }
   }

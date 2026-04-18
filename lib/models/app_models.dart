@@ -10,16 +10,19 @@ enum StorageLocation {
   @HiveField(0) fridge,
   @HiveField(1) freezer,
   @HiveField(2) cupboard,
-  @HiveField(3) spices
+  @HiveField(3) spices,
+  @HiveField(4) pantry
+
 }
 
 extension StorageLocationExtension on StorageLocation {
   String get displayName {
     switch (this) {
-      case StorageLocation.fridge: return 'Fridge';
-      case StorageLocation.freezer: return 'Freezer';
-      case StorageLocation.cupboard: return 'Cupboard';
-      case StorageLocation.spices: return 'Spices';
+      case StorageLocation.fridge: return '冷藏室';
+      case StorageLocation.freezer: return '冷冻室';
+      case StorageLocation.cupboard: return '橱柜';
+      case StorageLocation.spices: return '调料架';
+      case StorageLocation.pantry: return '茶水间';
     }
   }
 }

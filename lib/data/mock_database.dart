@@ -63,6 +63,9 @@ Future<void> _seedInitialData() async {
     IngredientCategory(id: 'cat_s2', name: '食用油', location: StorageLocation.spices),
     IngredientCategory(id: 'cat_s3', name: '基础调味料', location: StorageLocation.spices),
     IngredientCategory(id: 'cat_s4', name: '复合调味包', location: StorageLocation.spices),
+    IngredientCategory(id: 'cat_p1', name: '果汁饮料', location: StorageLocation.pantry),
+    IngredientCategory(id: 'cat_p2', name: '茶', location: StorageLocation.pantry),
+
   ];
 
   for (var cat in defaultCategories) {
