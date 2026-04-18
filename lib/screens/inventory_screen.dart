@@ -38,7 +38,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   }
 
   // 呼出食材编辑/新增弹窗
-  void _showIngredientDialog({Ingredient? existingIngredient, String? defaultCategoryId}) {
+// 🌟 1. 增加 defaultLocation 参数，并透传给 IngredientEditDialog
+  void _showIngredientDialog({Ingredient? existingIngredient, String? defaultCategoryId, StorageLocation? defaultLocation}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -46,10 +47,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       builder: (context) => IngredientEditDialog(
         existingIngredient: existingIngredient,
         defaultCategoryId: defaultCategoryId ?? _selectedCategoryId,
+        defaultLocation: defaultLocation, // 🌟 新增：传给弹窗内部
       ),
     );
   }
-
   // 核心逻辑 1：滑动右侧时，反向计算并更新左侧菜单
   void _syncLeftMenu(List<IngredientCategory> categories) {
     String? activeCategoryId;
@@ -298,18 +299,22 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                 else
                   ...ingredients.map((ing) => IngredientCard(ingredient: ing)),
                   
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24.0, top: 4.0),
-                  child: InkWell(
-                    onTap: () => _showIngredientDialog(defaultCategoryId: cat.id),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                      alignment: Alignment.center,
-                      child: Text('+ 添加到 ${cat.name}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                    ),
+Padding(
+                padding: const EdgeInsets.only(bottom: 24.0, top: 4.0),
+                child: InkWell(
+                  // 🌟 2. 在这里精确传递当前所在的大类
+                  onTap: () => _showIngredientDialog(
+                    defaultCategoryId: cat.id,
+                    defaultLocation: _selectedLocation, // 新增这一行
                   ),
-                )
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                    alignment: Alignment.center,
+                    child: Text('+ 添加到 ${cat.name}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                  ),
+                ),
+              )
               ],
             );
           }).toList(),

@@ -8,6 +8,7 @@ import '../data/mock_database.dart'; // 暂时用于读取 allRecipes 和 recipe
 class IngredientEditDialog extends ConsumerStatefulWidget {
   final Ingredient? existingIngredient;
   final String? defaultCategoryId;
+  final StorageLocation? defaultLocation;
 
   // 🌟 新增这一行：允许外部拦截保存动作
   final void Function(Ingredient)? onSaveOverride;
@@ -16,6 +17,7 @@ class IngredientEditDialog extends ConsumerStatefulWidget {
     super.key, 
     this.existingIngredient, 
     this.defaultCategoryId,
+    this.defaultLocation,
     this.onSaveOverride, // 🌟 新增
   });
 
@@ -54,7 +56,7 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
       selectedLoc = cat.location;
       selectedCategoryId = widget.existingIngredient!.categoryId;
     } else {
-      selectedLoc = StorageLocation.fridge; // 默认冰箱
+      selectedLoc = widget.defaultLocation ?? StorageLocation.fridge;
       selectedCategoryId = widget.defaultCategoryId;
     }
 
@@ -134,71 +136,63 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
               const SizedBox(height: 20),
 
               // 3. 位置与分类联动
-              Row(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('位置', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<StorageLocation>(
-                              isExpanded: true,
-                              value: selectedLoc,
-                              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
-                              items: StorageLocation.values.map((loc) => DropdownMenuItem(value: loc, child: Text(loc.displayName, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
-                              onChanged: (loc) {
-                                if (loc != null) {
-                                  setState(() {
-                                    selectedLoc = loc;
-                                    final newCats = ref.read(categoryProvider).where((c) => c.location == loc).toList();
-                                    selectedCategoryId = newCats.isNotEmpty ? newCats.first.id : null;
-                                  });
-                                }
-                              },
-                            ),
-                          ),
+                  const Text('位置', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  // 第一行：位置标签 (取代了原来的 Dropdown)
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: StorageLocation.values.map((loc) {
+                      final isSel = selectedLoc == loc;
+                      return ChoiceChip(
+                        label: Text(loc.displayName),
+                        selected: isSel,
+                        showCheckmark: false, // 👈 保留你的优秀优化：去掉打勾图标
+                        selectedColor: const Color(0xFF10C07B).withValues(alpha: 0.15),
+                        labelStyle: TextStyle(
+                          color: isSel ? const Color(0xFF10C07B) : Colors.black87, 
+                          fontWeight: FontWeight.bold // 👈 保留你的优秀优化：固定加粗防止闪烁
                         ),
-                      ],
-                    ),
+                        side: BorderSide(color: isSel ? const Color(0xFF10C07B) : Colors.grey.shade300),
+                        onSelected: (val) {
+                          setState(() {
+                            selectedLoc = loc;
+                            // 🌟 核心：切换位置时，自动抓取新位置下的第一个分类 (使用 Riverpod)
+                            final newCats = ref.read(categoryProvider).where((c) => c.location == loc).toList();
+                            selectedCategoryId = newCats.isNotEmpty ? newCats.first.id : null;
+                          });
+                        },
+                      );
+                    }).toList(),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('分类', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        availableCategories.isEmpty 
-                          ? const Text('该位置暂无分类', style: TextStyle(color: Colors.red, fontSize: 12))
-                          : Wrap(
-                              spacing: 8, runSpacing: 8,
-                              children: availableCategories.map((cat) {
-                                final isSel = selectedCategoryId == cat.id;
-                                return ChoiceChip(
-                                          label: Text(cat.name),
-                                          selected: isSel,
-                                          showCheckmark: false, // 👈 [新增]：彻底去掉丑陋的默认打勾图标
-                                          selectedColor: const Color(0xFF10C07B).withValues(alpha: 0.1),
-                                          labelStyle: TextStyle(
-                                            color: isSel ? const Color(0xFF10C07B) : Colors.black87, 
-                                            fontWeight: FontWeight.bold // 👈 [修改]：无论是否选中，都固定加粗，彻底消除布局闪烁！
-                                          ),
-                                          side: BorderSide(color: isSel ? const Color(0xFF10C07B) : Colors.grey.shade300),
-                                          onSelected: (val) => setState(() => selectedCategoryId = cat.id),
-                                        );
-                              }).toList(),
+                  
+                  const SizedBox(height: 16),
+                  
+                  const Text('分类', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  // 第二行：分类标签
+                  availableCategories.isEmpty 
+                    ? const Text('该位置暂无分类，请先去首页新建', style: TextStyle(color: Colors.red, fontSize: 12))
+                    : Wrap(
+                        spacing: 8, runSpacing: 8,
+                        children: availableCategories.map((cat) {
+                          final isSel = selectedCategoryId == cat.id;
+                          return ChoiceChip(
+                            label: Text(cat.name),
+                            selected: isSel,
+                            showCheckmark: false, // 👈 保留你的优秀优化
+                            selectedColor: const Color(0xFF10C07B).withValues(alpha: 0.1),
+                            labelStyle: TextStyle(
+                              color: isSel ? const Color(0xFF10C07B) : Colors.black87, 
+                              fontWeight: FontWeight.bold // 👈 保留你的优秀优化
                             ),
-                      ],
-                    ),
-                  ),
+                            side: BorderSide(color: isSel ? const Color(0xFF10C07B) : Colors.grey.shade300),
+                            onSelected: (val) => setState(() => selectedCategoryId = cat.id),
+                          );
+                        }).toList(),
+                      ),
                 ],
               ),
               const SizedBox(height: 20),

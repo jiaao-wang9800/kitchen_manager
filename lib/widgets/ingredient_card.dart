@@ -71,6 +71,28 @@ class IngredientCard extends ConsumerWidget {
     );
   }
 
+
+// 🌟 新增：一键快捷加入购物车逻辑
+  Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
+    final shoppingItem = ShoppingItem(
+      id: generateId(), 
+      ingredientId: ingredient.id, 
+      groupName: '🛒 快捷补货', // 给它一个专属的智能分组
+    );
+    
+    await ref.read(cartProvider.notifier).addOrUpdateItem(shoppingItem);
+    
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${ingredient.name} 已加入购物车！'), 
+          backgroundColor: Colors.orange, // 使用醒目的橙色提示
+          duration: const Duration(seconds: 2),
+        )
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     bool isExpired = ingredient.expirationDate != null && ingredient.expirationDate!.isBefore(DateTime.now());
@@ -193,14 +215,14 @@ return Opacity(
                   
                   const SizedBox(width: 12), // 左右两块区域的呼吸空间
                   
-                  // =====================================
+// =====================================
                   // 右侧：操作按钮区 (彻底解脱高度限制)
                   // =====================================
                   Column(
                     mainAxisSize: MainAxisSize.min, // 高度包裹内容
                     children: [
+                      // 🌟 核心升级：有货显示“吃完”，缺货显示“加购”
                       if (!isOutOfStock) ...[
-                        // 🌟 使用 InkWell 手动捏按钮，去掉 IconButton 默认死板的内边距
                         InkWell(
                           onTap: () => _confirmConsume(context, ref),
                           borderRadius: BorderRadius.circular(20),
@@ -209,8 +231,19 @@ return Opacity(
                             child: Icon(Icons.check_circle_outline, color: Colors.teal, size: 22),
                           ),
                         ),
-                        const SizedBox(height: 8), // 两个按钮上下隔开一点距离
+                        const SizedBox(height: 8), 
+                      ] else ...[
+                        InkWell(
+                          onTap: () => _addToCart(context, ref), // 👆 调用我们刚写的加购方法
+                          borderRadius: BorderRadius.circular(20),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6.0),
+                            child: Icon(Icons.add_shopping_cart, color: Colors.orange, size: 22), // 缺货时显示橙色购物车
+                          ),
+                        ),
+                        const SizedBox(height: 8), 
                       ],
+                      // 下方始终保留编辑按钮
                       InkWell(
                         onTap: () => _showEditDialog(context),
                         borderRadius: BorderRadius.circular(20),
@@ -220,7 +253,7 @@ return Opacity(
                         ),
                       ),
                     ],
-                  ),
+                  ),  
                 ],
               ),
             ),
