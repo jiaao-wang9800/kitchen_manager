@@ -57,6 +57,7 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('扫描失败: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red));
     } 
   }
+  
   @override
   Widget build(BuildContext context) {
     // 🌟 全局监听购物车和库存
@@ -64,15 +65,20 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
     final inventory = ref.watch(inventoryProvider);
 
     Map<String, List<ShoppingItem>> calendarGroups = {};
-    Map<String, List<ShoppingItem>> manualGroups = {};
+    Map<String, List<ShoppingItem>> recipeRestockGroups = {}; // 🌟 独立保留：菜谱缺货
+    List<ShoppingItem> generalRestockItems = []; // 🌟 合并项：智能补货(Restock) & 快捷补货(手动添加)
 
     for (var item in cartItems) {
       if (item.mealPlanId != null) {
+        // 1. 来自日历计划
         String group = item.groupName ?? '📅 计划所需';
         calendarGroups.putIfAbsent(group, () => []).add(item);
+      } else if (item.groupName != null && item.groupName!.contains('菜谱补货')) {
+        // 2. 来自菜谱缺货一键添加
+        recipeRestockGroups.putIfAbsent(item.groupName!, () => []).add(item);
       } else {
-        String group = item.groupName ?? '🛒 其他';
-        manualGroups.putIfAbsent(group, () => []).add(item);
+        // 3. 其他常规补货（包含 Restock 和 手动添加）
+        generalRestockItems.add(item);
       }
     }
 
@@ -104,9 +110,15 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
                       ...calendarGroups.entries.map((entry) => _buildGroup(entry.key, entry.value, inventory, isCalendar: true)),
                     ],
 
-                    if (manualGroups.isNotEmpty) ...[
-                      const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [Icon(Icons.shopping_bag, size: 18, color: Colors.teal), SizedBox(width: 8), Text('手动添加 / 补货', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.teal))])),
-                      ...manualGroups.entries.map((entry) => _buildGroup(entry.key, entry.value, inventory, isCalendar: false)),
+                    if (recipeRestockGroups.isNotEmpty) ...[
+                      const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [Icon(Icons.menu_book, size: 18, color: Colors.deepOrange), SizedBox(width: 8), Text('菜谱所需补货', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepOrange))])),
+                      ...recipeRestockGroups.entries.map((entry) => _buildGroup(entry.key, entry.value, inventory, isCalendar: false)),
+                    ],
+
+                    // 🌟 统一展示：智能补货 & 快捷补货
+                    if (generalRestockItems.isNotEmpty) ...[
+                      const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [Icon(Icons.shopping_bag, size: 18, color: Colors.teal), SizedBox(width: 8), Text('快捷补货', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.teal))])),
+                      _buildGroup('🛒 常规补货清单', generalRestockItems, inventory, isCalendar: false),
                     ],
                     const SizedBox(height: 100),
                   ],
@@ -173,6 +185,7 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
+          // 这里可以隐去 subtitle，因为“常规补货清单”已经很明确了
           subtitle: isCalendar ? const Text('自动同步', style: TextStyle(fontSize: 10, color: Colors.grey)) : null,
           value: cartItem.isPurchased,
           activeColor: Colors.teal,
