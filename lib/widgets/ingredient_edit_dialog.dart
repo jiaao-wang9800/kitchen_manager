@@ -37,6 +37,8 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
   List<String> linkedRecipeIds = [];
   String recipeSearchQuery = '';
 
+  Ingredient? _duplicateWarningIngredient;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +81,23 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
     super.dispose();
   }
 
+  // 🌟 新增：实时检测重名
+  void _checkForDuplicates(String inputName) {
+    if (widget.existingIngredient != null) return; // 编辑模式不用测重名
+    
+    if (inputName.trim().isEmpty) {
+      setState(() => _duplicateWarningIngredient = null);
+      return;
+    }
+
+    final allInventory = ref.read(inventoryProvider);
+    final match = allInventory.where((i) => i.name.toLowerCase() == inputName.trim().toLowerCase()).firstOrNull;
+    
+    setState(() {
+      _duplicateWarningIngredient = match;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existingIngredient != null;
@@ -116,13 +135,14 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
                   IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(context)),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
 
               // 2. 名称输入
               const Text('名称', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextField(
                 controller: nameController,
+                onChanged: _checkForDuplicates, // 🌟 挂载检测函数
                 decoration: InputDecoration(
                   hintText: '输入名称...',
                   hintStyle: TextStyle(color: Colors.grey.shade400),
@@ -133,7 +153,39 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10C07B))),
                 ),
               ),
-              const SizedBox(height: 20),
+              
+              
+              // 🌟 重名警告提示
+              if (_duplicateWarningIngredient != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orange.shade200)),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline, color: Colors.orange, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+child: Builder(
+                            builder: (context) {
+                              // 🌟 修复：直接用 ref.read 获取，绝对不会报错
+                              final categories = ref.read(categoryProvider);
+                              final cat = categories.firstWhere((c) => c.id == _duplicateWarningIngredient!.categoryId, orElse: () => categories.first);
+                              final status = _duplicateWarningIngredient!.inStock ? '当前已有库存' : '曾买过，目前缺货';
+                              return Text(
+                                '发现同名食材！它位于【${cat.location.displayName} - ${cat.name}】，$status。继续入库将自动累加数量并覆盖位置。',
+                                style: TextStyle(color: Colors.orange.shade800, fontSize: 12, height: 1.3),
+                              );
+                            }
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
 
               // 3. 位置与分类联动
               Column(
@@ -160,7 +212,7 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
                           setState(() {
                             selectedLoc = loc;
                             // 🌟 核心：切换位置时，自动抓取新位置下的第一个分类 (使用 Riverpod)
-                            final newCats = ref.read(categoryProvider).where((c) => c.location == loc).toList();
+                            final newCats = ref.read(categoryProvider).where((c) => c.location == loc).toList();                            
                             selectedCategoryId = newCats.isNotEmpty ? newCats.first.id : null;
                           });
                         },
@@ -196,6 +248,45 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
                 ],
               ),
               const SizedBox(height: 20),
+
+              // 🌟 将提交按钮提到这里，实现“一键极速入库”
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10C07B), 
+                    foregroundColor: Colors.white, 
+                    elevation: 2, 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                  ),
+                  icon: const Icon(Icons.check),
+                  label: Text(_duplicateWarningIngredient != null ? '合并入库' : '极速入库', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  onPressed: _saveIngredient,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // ==========================================
+              // 🌟 视觉分割线
+              // ==========================================
+              Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('选填详细信息', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // ==========================================
+              // 🌟 下半部分 - 选填详细信息区
+              // ==========================================
+
 
               // 4. 数量与单位
               const Text('数量与单位 (选填)', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),

@@ -1,56 +1,64 @@
-My Kitchen - Rebuilding Project
+My Kitchen - Rebuilding Project (Updated 2026.04)
 当前架构 (Current Architecture)
-/lib/main.dart - 仅保留 runApp 和 UI Theme
+Screens (页面层)
+/lib/screens/inventory_screen.dart - (重构) 厨房主仓库。实现了 双向联动滚动 (Scroll Spy)、全局上帝视角搜索 及 中英文拼音 A-Z 排序。
 
-/lib/providers/init_provider.dart - 控制 App 启动流程和加载状态
+/lib/screens/category_manager_screen.dart - (新增) 完整的分类管理中心。支持分类的 CRUD（增删改查），并按 StorageLocation 自动分组展示。
 
-/lib/providers/... - (新增) 包含 mealPlanProvider、inventoryProvider、cartProvider 等核心业务逻辑与状态分发
+/lib/screens/calendar_screen.dart - 日历与计划主页，已拆分瘦身。
 
-/lib/screens/splash_screen.dart - 拦截应用第一帧，负责数据库初始化的安全缓冲
+/lib/screens/splash_screen.dart - 拦截第一帧，负责数据库初始化的安全缓冲。
 
-/lib/screens/calendar_screen.dart - (重构) 日历与计划主页，已拆分瘦身
+Widgets (组件层)
+/lib/widgets/inventory_location_bar.dart - (新增) 抽离的顶部位置切换滑动栏。
 
-/lib/widgets/calendar_meal_list.dart - (新增) 抽离的每日三餐列表视图，负责渲染和打勾逻辑
+/lib/widgets/ingredient_edit_dialog.dart - (重构) 深度优化入库逻辑。采用 “速记+选填”分层布局，支持 实时重名检测预警 和全标签化 (ChoiceChip) 选择体验。
 
-/lib/widgets/combine_meal_picker.dart - (新增) 高度集成的紧凑版“安排计划”弹窗（左日历，右餐段）
+/lib/widgets/ingredient_card.dart - (重构) 极致空间压缩。支持 缺货状态一键补货 (Add to Cart) 闭环逻辑。
 
-/lib/widgets/recipe_consume_dialog.dart - (新增) 闭环核心组件：针对单道菜谱的“迷你食材结算弹窗”
+/lib/widgets/add_category_dialog.dart - 专用的快捷分类添加弹窗（适配联动传参）。
 
-/lib/services/database_service.dart - 隔离的 Hive 数据库初始化服务
+/lib/widgets/recipe_consume_dialog.dart - 针对单道菜谱的“迷你食材结算弹窗”。
 
-/lib/data/mock_database.dart - 承担数据库初始化和默认模板注入（支持按名字去重机制）
+Data & Logic (数据与逻辑)
+/lib/providers/kitchen_provider.dart - 核心业务逻辑，现包含 PinyinHelper 排序算法。
 
-/lib/data/my_initial_inventory.dart - (新增) 用户专属私有初始数据，包含精准的 DietaryGroup 划分
+/lib/services/database_service.dart - 隔离的 Hive 初始化服务。
 
-/lib/models/app_models.dart - 数据模型定义，已扩充 StorageLocation.pantry 和 MealPlan.isCompleted
+/pubspec.yaml - 引入了 lpinyin 库，支持汉字转拼音的检索与排序。
 
 已实现功能 (Features Completed)
 Phase 1: 基础架构与防崩溃
-[x] 基础架构重构，全面引入 Riverpod。
+[x] 全面引入 Riverpod 状态管理。
 
-[x] 安全的启动屏 (SplashScreen) 防白屏机制，带有自动错误恢复。
+[x] 安全启动屏机制与异步隔离 Hive 初始化。
 
-[x] 异步隔离 Hive 数据库的初始化逻辑。
+Phase 2: 极致库存与搜索交互 (Latest Update 🚀)
+[x] 双向联动联动 (Scroll Spy)：左侧分类菜单与右侧列表实时同步，支持点击跳转与滑动感应。
 
-Phase 2: 高级库存管理 (Inventory Management)
-[x] 架构扩充：底层模型与 UI 全面支持 StorageLocation.pantry (茶水间) 存储位置。
+[x] 全局上帝视角搜索：支持搜索全部位置的食材，适配 拼音首字母/全拼检索（如搜 pg 匹配 苹果）。
 
-[x] 私有数据灌入：建立 my_initial_inventory.dart，支持批量导入自带完整宏量营养素 (Macros) 和膳食结构 (DietaryGroup) 的用户私有食材。
+[x] 中英文混合 A-Z 排序：利用 lpinyin 实现分类与食材按拼音顺序优雅排列。
 
-[x] 智能防重机制 (Upsert by Name)：数据库初始化时采用按“食材名称”去重的黄金逻辑，避免默认数据与用户私有数据发生冲突。
+[x] 智能重名预警：入库时实时检测重名，支持自动合并旧数据，防止数据碎片化。
 
-Phase 3: 智能日历与闭环结算 (Meal Planning & Consumption Loop)
-[x] 高度一致的 UI 体验：菜谱详情页与日历页统一使用 CombinedMealPicker 进行计划安排。
+[x] 入库布局分层：将“名称、分类”等必填项置顶并上移保存按钮，实现“指哪打哪”的极速录入体验。
 
-[x] 日历页模块化：拆分复杂的长文件，将三餐列表渲染逻辑解耦至 CalendarMealList。
+Phase 3: 分类管理与购物闭环
+[x] 分组分类管理：支持分类的重命名、修改位置，并按位置区块化展示，逻辑清晰。
 
-[x] “吃完即算”闭环：在日历打勾完成一顿饭时，自动呼出包含该菜谱所需食材的“迷你库存弹窗”进行结算。
+[x] 安全删除机制：删除分类前自动检测是否有食材占用，防止引发逻辑崩溃。
 
-[x] 无缝连招 (Inventory to Cart)：在结算弹窗中点击消耗食材时，系统智能拦截并弹出二次确认，支持一键将耗尽的食材转移至购物车 (ShoppingItem)。
+[x] 缺货一键加购：卡片智能识别状态，缺货食材自动显示购物车图标，实现“耗尽 -> 补货”的极简路径。
+
+Phase 4: 智能日历与结算 (Previous)
+[x] “吃完即算”结算闭环，支持将消耗食材一键转移至购物车 (ShoppingItem)。
+
+[x] 菜谱详情页与日历页统一使用 CombinedMealPicker。
 
 状态管理策略 (State Management Strategy)
-核心框架深度绑定 Riverpod。
+Riverpod 作为核心大脑：通过 NotifierProvider 处理跨页面联动（例如：在分类管理中重命名分类 -> 自动同步到库存列表和入库弹窗）。
 
-FutureProvider 用于处理异步初始化和防奔溃状态拦截。
+拼音排序逻辑：在数据流向下传递至 UI 之前，在 build 方法中实时进行拼音加权排序，确保 UI 呈现高度一致性。
 
-NotifierProvider / StateNotifierProvider 负责处理跨页面的联动刷新（如：点击库存消耗 -> 本地 Hive 更新 -> 触发 UI 列表自动划线变灰 -> 触发购物车角标数字更新），实现真正的响应式数据流。
+防冲突锁：在处理复杂的联动滚动时，引入 _isManualScrolling 布尔锁，确保用户点击与系统自动滚动的反馈不会发生逻辑震荡。

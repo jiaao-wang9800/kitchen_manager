@@ -8,7 +8,8 @@ import '../widgets/ingredient_edit_dialog.dart';
 import '../main.dart'; // for isStardewTheme
 import 'matched_recipes_screen.dart';
 import '../widgets/ingredient_card.dart';
-
+import 'package:lpinyin/lpinyin.dart';
+import 'category_manager_screen.dart'; // 🌟 新增：引入分类管理页面
 // 🌟 引入刚刚拆分出来的两个新组件
 import '../widgets/add_category_dialog.dart';
 import '../widgets/inventory_location_bar.dart';
@@ -30,10 +31,16 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   final Map<String, GlobalKey> _categoryKeys = {};
   bool _isManualScrolling = false; 
 
+  // 🌟 新增：搜索相关的状态
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void dispose() {
     _leftScrollController.dispose();
     _rightScrollController.dispose();
+    _searchController.dispose(); // 别忘了销毁
     super.dispose();
   }
 
@@ -98,7 +105,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     final allCategories = ref.watch(categoryProvider);
     final myInventory = ref.watch(inventoryProvider);
@@ -106,11 +113,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final locationCategories = allCategories.where((c) => c.location == _selectedLocation).toList();
 
     locationCategories.sort((a, b) {
-      final aIsDefault = a.id.startsWith('cat_');
-      final bIsDefault = b.id.startsWith('cat_');
-      if (aIsDefault && !bIsDefault) return -1;
-      if (!aIsDefault && bIsDefault) return 1;
-      return a.id.compareTo(b.id); 
+      String pinyinA = PinyinHelper.getPinyinE(a.name).toLowerCase();
+      String pinyinB = PinyinHelper.getPinyinE(b.name).toLowerCase();
+      return pinyinA.compareTo(pinyinB);
     });
     
     if (_selectedCategoryId == null && locationCategories.isNotEmpty) {
@@ -123,84 +128,168 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0.5,
-          title: const Text('My Kitchen', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+          title: _isSearching
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: '在全部食材库中搜索...',
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(color: Colors.grey),
+                    // 🌟 修复 1：删掉了这里的 suffixIcon，因为它容易被拦截
+                  ),
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                )
+              : const Text('My Kitchen', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
           iconTheme: const IconThemeData(color: Colors.black87),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.create_new_folder_outlined, color: Color(0xFF10C07B)), 
-              tooltip: '新增分类',
-              // 🌟 调用抽离后的新增分类弹窗
-              onPressed: () => showDialog(
-                context: context,
-                builder: (context) => AddCategoryDialog(
-                  currentLocation: _selectedLocation,
-                  onCategoryAdded: (newCategoryId) {
-                    setState(() => _selectedCategoryId = newCategoryId);
-                  },
-                ),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.bolt, color: Colors.orangeAccent), 
-              tooltip: '一键刷新营养成分', 
-              onPressed: () async {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🤖 AI 正在分析库中食材，请稍候...')));
-                try {
-                  final count = await ref.read(inventoryProvider.notifier).batchAnalyzeNutrition();
-                  if (context.mounted) {
-                    if (count > 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✨ 成功为 $count 项食材匹配营养标签！'), backgroundColor: const Color(0xFF10C07B)));
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('所有食材都已分析完毕，无需刷新啦 ✨')));
-                    }
-                  }
-                } catch (e) {
-                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('分析失败，请检查网络或 API 设置'), backgroundColor: Colors.red));
-                }
-              },
-            ),
-          ],
-        ),  
-        body: Column(
-          children: [
-            // 🌟 引入抽离后的位置切换栏
-            InventoryLocationBar(
-              selectedLocation: _selectedLocation,
-              onLocationChanged: (newLocation) {
-                setState(() {
-                  _selectedLocation = newLocation;
-                  _selectedCategoryId = null; 
-                });
-                if (_rightScrollController.hasClients) {
-                  _rightScrollController.jumpTo(0);
-                }
-              },
-            ),
-            const Divider(height: 1, color: Color(0xFFEEEEEE)),
-            
-            // 下半部分：左右联动的核心视图
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          actions: _isSearching 
+              ? [
+                  // 🌟 修复 2：把关闭按钮放到原生的 actions 列表里！这里的点击绝对百分百触发。
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.black54),
+                    onPressed: () {
+                      setState(() {
+                        _isSearching = false;
+                        _searchController.clear();
+                        _searchQuery = '';
+                      });
+                    },
+                  ),
+                ] 
+              : [
+                  // 非搜索状态下，显示搜索按钮和其他原有按钮
+                  IconButton(
+                    icon: const Icon(Icons.search, color: Colors.black54),
+                    onPressed: () => setState(() => _isSearching = true),
+                  ),
+                  // 🌟 修复：改为跳转到完整的分类管理页面
+                  IconButton(
+                    icon: const Icon(Icons.folder_copy_outlined, color: Color(0xFF10C07B)), // 换个图标，表示“分类管理”
+                    tooltip: '管理分类',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CategoryManagerScreen(),
+                        ),
+                      );
+                    },
+                  ),                  IconButton(
+                    icon: const Icon(Icons.bolt, color: Colors.orangeAccent), 
+                    tooltip: '一键刷新营养成分', 
+                    onPressed: () async {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🤖 AI 正在分析库中食材，请稍候...')));
+                      try {
+                        final count = await ref.read(inventoryProvider.notifier).batchAnalyzeNutrition();
+                        if (context.mounted) {
+                          if (count > 0) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✨ 成功为 $count 项食材匹配营养标签！'), backgroundColor: const Color(0xFF10C07B)));
+                        }
+                      } catch (e) {}
+                    },
+                  ),
+                ],
+        ),// 🌟 核心升级：如果是搜索状态，就直接展示全局结果列表！
+        
+        body: _isSearching
+            ? _buildGlobalSearchResults(myInventory, allCategories)
+            : Column(
                 children: [
-                  _buildLeftCategoryMenu(locationCategories),
-                  Expanded(child: _buildRightContentArea(locationCategories, myInventory)),
+                  InventoryLocationBar(
+                    selectedLocation: _selectedLocation,
+                    onLocationChanged: (newLocation) {
+                      setState(() {
+                        _selectedLocation = newLocation;
+                        _selectedCategoryId = null; 
+                      });
+                      if (_rightScrollController.hasClients) {
+                        _rightScrollController.jumpTo(0);
+                      }
+                    },
+                  ),
+                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLeftCategoryMenu(locationCategories),
+                        Expanded(child: _buildRightContentArea(locationCategories, myInventory)),
+                      ],
+                    ),
+                  )
                 ],
               ),
-            )
-          ],
-        ),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: const Color(0xFF10C07B),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), 
-          elevation: 2,
-          onPressed: () => _showIngredientDialog(),
-          child: const Icon(Icons.add, color: Colors.white, size: 28),
-        ),
+        // 搜索时隐藏悬浮按钮
+        floatingActionButton: _isSearching 
+            ? null 
+            : FloatingActionButton(
+                backgroundColor: const Color(0xFF10C07B),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), 
+                elevation: 2,
+                onPressed: () => _showIngredientDialog(),
+                child: const Icon(Icons.add, color: Colors.white, size: 28),
+              ),
       ),
     );
   }
+  
+  // ============== 🌟 新增：全局搜索结果视图 ==============
+  Widget _buildGlobalSearchResults(List<Ingredient> myInventory, List<IngredientCategory> allCategories) {
+    if (_searchQuery.isEmpty) {
+      return const Center(child: Text('输入名称搜索全部食材', style: TextStyle(color: Colors.grey)));
+    }
 
+    // 1. 在整个厨房过滤食材（支持原生包含匹配，也可以扩展支持拼音搜索）
+    var results = myInventory.where((i) {
+      final matchName = i.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      // 可选：如果用拼音库，还可以支持搜拼音 `pingguo` 匹配 `苹果`
+      final matchPinyin = PinyinHelper.getPinyinE(i.name).toLowerCase().replaceAll(' ', '').contains(_searchQuery.toLowerCase());
+      return matchName || matchPinyin;
+    }).toList();
+
+    if (results.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text('没有找到相关食材', style: TextStyle(color: Colors.grey)),
+          ],
+        )
+      );
+    }
+
+    // 2. 按首字母排个序
+    results.sort((a, b) => PinyinHelper.getPinyinE(a.name).toLowerCase().compareTo(PinyinHelper.getPinyinE(b.name).toLowerCase()));
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final ing = results[index];
+        // 去总分类表里找出它的归属地
+        final cat = allCategories.firstWhere((c) => c.id == ing.categoryId, 
+          orElse: () => IngredientCategory(id: 'unknown', name: '未知分类', location: StorageLocation.fridge)
+        );
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 🌟 贴心细节：搜索结果上方标明该食材的存放位置和分类
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4, top: 12),
+              child: Text(
+                '📍 ${cat.location.displayName} - ${cat.name}', 
+                style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)
+              ),
+            ),
+            IngredientCard(ingredient: ing),
+          ],
+        );
+      },
+    );
+  }
+  
   // ============== 局部组件：左侧菜单 ==============
   Widget _buildLeftCategoryMenu(List<IngredientCategory> categories) {
     return Container(
@@ -279,7 +368,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             ingredients.sort((a, b) {
               if (a.inStock && !b.inStock) return -1;
               if (!a.inStock && b.inStock) return 1;
-              return a.name.compareTo(b.name); 
+              
+              // 🌟 食材同样按拼音 A-Z 排序
+              String pinyinA = PinyinHelper.getPinyinE(a.name).toLowerCase();
+              String pinyinB = PinyinHelper.getPinyinE(b.name).toLowerCase();
+              return pinyinA.compareTo(pinyinB); 
             });
 
             return Column(
