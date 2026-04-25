@@ -8,6 +8,7 @@ import '../services/ai_scanner_service.dart';
 import '../providers/kitchen_provider.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/ai_scanner_review_dialog.dart';
+import '../widgets/ingredient_edit_dialog.dart'; // 🌟 导入神级编辑弹窗
 
 class ShoppingCartScreen extends ConsumerStatefulWidget {
   const ShoppingCartScreen({super.key});
@@ -19,9 +20,6 @@ class ShoppingCartScreen extends ConsumerStatefulWidget {
 class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
   bool _isScanning = false;
 
-// ==========================================
-  // 🌟 Smart AI Scanner Logic (Riverpod Powered)
-  // ==========================================
   Future<void> _scanReceipt() async {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery); 
@@ -31,27 +29,23 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
 
     try {
       final bytes = await image.readAsBytes();
-      
-      // 1. 获取全局的分类数据传给 AI
       final allCategories = ref.read(categoryProvider);
       final results = await ReceiptScannerService.scanGroceries(bytes, categories: allCategories);
       
-      setState(() => _isScanning = false); // 扫描完成，关闭 loading 蒙层
+      setState(() => _isScanning = false); 
 
       if (results.isEmpty) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未能识别到食材，请换一张清晰的照片试试。')));
         return;
       }
 
-      // 🌟 核心拦截：唤出核对弹窗，后续的入库逻辑全交由弹窗内部处理
       if (mounted) {
         showDialog(
           context: context,
-          barrierDismissible: false, // 强制用户必须点击按钮关闭，防止误触消失
+          barrierDismissible: false, 
           builder: (context) => AiScannerReviewDialog(scannedItems: results),
         );
       }
-
     } catch (e) {
       setState(() => _isScanning = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('扫描失败: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red));
@@ -60,24 +54,20 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
   
   @override
   Widget build(BuildContext context) {
-    // 🌟 全局监听购物车和库存
     final cartItems = ref.watch(cartProvider);
     final inventory = ref.watch(inventoryProvider);
 
     Map<String, List<ShoppingItem>> calendarGroups = {};
-    Map<String, List<ShoppingItem>> recipeRestockGroups = {}; // 🌟 独立保留：菜谱缺货
-    List<ShoppingItem> generalRestockItems = []; // 🌟 合并项：智能补货(Restock) & 快捷补货(手动添加)
+    Map<String, List<ShoppingItem>> recipeRestockGroups = {}; 
+    List<ShoppingItem> generalRestockItems = []; 
 
     for (var item in cartItems) {
       if (item.mealPlanId != null) {
-        // 1. 来自日历计划
         String group = item.groupName ?? '📅 计划所需';
         calendarGroups.putIfAbsent(group, () => []).add(item);
       } else if (item.groupName != null && item.groupName!.contains('菜谱补货')) {
-        // 2. 来自菜谱缺货一键添加
         recipeRestockGroups.putIfAbsent(item.groupName!, () => []).add(item);
       } else {
-        // 3. 其他常规补货（包含 Restock 和 手动添加）
         generalRestockItems.add(item);
       }
     }
@@ -115,10 +105,9 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
                       ...recipeRestockGroups.entries.map((entry) => _buildGroup(entry.key, entry.value, inventory, isCalendar: false)),
                     ],
 
-                    // 🌟 统一展示：智能补货 & 快捷补货
                     if (generalRestockItems.isNotEmpty) ...[
                       const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 8), child: Row(children: [Icon(Icons.shopping_bag, size: 18, color: Colors.teal), SizedBox(width: 8), Text('快捷补货', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.teal))])),
-                      _buildGroup('🛒 常规补货清单', generalRestockItems, inventory, isCalendar: false),
+                      _buildGroup('🛒 补货清单', generalRestockItems, inventory, isCalendar: false),
                     ],
                     const SizedBox(height: 100),
                   ],
@@ -155,9 +144,10 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
             label: const Text('智能小票入库', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 16),
+          // 🌟 改为唤出全新的搜索快捷弹窗
           FloatingActionButton(
             heroTag: 'manual_add_btn',
-            onPressed: () => showDialog(context: context, builder: (c) => const ManualAddCartDialog()),
+            onPressed: () => showDialog(context: context, builder: (c) => const ManualAddCartSearchDialog()),
             backgroundColor: Colors.teal,
             child: const Icon(Icons.add, color: Colors.white),
           ),
@@ -185,12 +175,10 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          // 这里可以隐去 subtitle，因为“常规补货清单”已经很明确了
           subtitle: isCalendar ? const Text('自动同步', style: TextStyle(fontSize: 10, color: Colors.grey)) : null,
           value: cartItem.isPurchased,
           activeColor: Colors.teal,
           onChanged: (bool? val) async {
-            // 🌟 使用 Riverpod 联动更新状态
             cartItem.isPurchased = val!;
             ingredient.inStock = val;
             await ref.read(cartProvider.notifier).addOrUpdateItem(cartItem);
@@ -209,58 +197,179 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
 }
 
 // ==========================================
-// 🌟 提取的独立弹窗组件：手动添加到购物车
+// 🌟 全新重构：复用搜索与新建逻辑的购物车快捷弹窗
 // ==========================================
-class ManualAddCartDialog extends ConsumerStatefulWidget {
-  const ManualAddCartDialog({super.key});
+class ManualAddCartSearchDialog extends ConsumerStatefulWidget {
+  const ManualAddCartSearchDialog({super.key});
+
   @override
-  ConsumerState<ManualAddCartDialog> createState() => _ManualAddCartDialogState();
+  ConsumerState<ManualAddCartSearchDialog> createState() => _ManualAddCartSearchDialogState();
 }
 
-class _ManualAddCartDialogState extends ConsumerState<ManualAddCartDialog> {
-  final nameCtrl = TextEditingController();
-  String? selectedCategoryId;
+class _ManualAddCartSearchDialogState extends ConsumerState<ManualAddCartSearchDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // 🌟 修复卡死 Bug：利用重叠弹窗和双重 pop 实现丝滑连贯的关闭
+  void _openCreateIngredientDialog(String initialName) {
+    // 删除了原来错误提前执行的 Navigator.pop(context);
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) => IngredientEditDialog(
+        initialName: initialName, 
+        onSaveOverride: (newIng) async {
+          // 1. 拦截保存动作：设为缺货
+          newIng.inStock = false;
+          
+          // 2. 保存这个新食材到全局库存
+          await ref.read(inventoryProvider.notifier).addOrUpdateIngredient(newIng);
+          
+          // 3. 创建 ShoppingItem 放入购物车
+          final newItem = ShoppingItem(
+            id: generateId(),
+            ingredientId: newIng.id,
+            groupName: '🛒 快捷补货',
+          );
+          await ref.read(cartProvider.notifier).addOrUpdateItem(newItem);
+          
+          // 4. 🌟 完美的双重关闭逻辑
+          if (bottomSheetContext.mounted) {
+            Navigator.pop(bottomSheetContext); // 先关闭底部的填写表单
+          }
+          if (context.mounted) {
+            Navigator.pop(context); // 再关闭背后的搜索弹窗
+          }
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final allCategories = ref.watch(categoryProvider);
+    final inventory = ref.watch(inventoryProvider);
+    final cartItems = ref.watch(cartProvider);
+
+    // 根据输入过滤库存
+    final filteredIngredients = inventory
+        .where((ing) => ing.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .toList();
+
+    // 判断是否有完全同名的食材，决定是否显示"新建"按钮
+    final exactMatchExists = inventory.any(
+        (ing) => ing.name.trim().toLowerCase() == _searchQuery.trim().toLowerCase());
 
     return AlertDialog(
-      title: const Text('Add to Cart'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: nameCtrl, 
-            decoration: const InputDecoration(labelText: 'Ingredient Name'),
-            onChanged: (val) => setState(() {}),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            decoration: const InputDecoration(labelText: 'Category (For Kitchen)'),
-            items: allCategories.map((cat) => DropdownMenuItem(value: cat.id, child: Text(cat.name))).toList(),
-            onChanged: (val) => setState(() => selectedCategoryId = val),
-          )
-        ],
+      title: const Text('添加食材到购物车', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      contentPadding: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400, // 固定高度
+        child: Column(
+          children: [
+            // 搜索框
+            TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: '搜索现有食材，或输入新名称...',
+                prefixIcon: const Icon(Icons.search, color: Colors.teal),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: () => setState(() {
+                          _searchController.clear();
+                          _searchQuery = '';
+                        }))
+                    : null,
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+              onChanged: (val) => setState(() => _searchQuery = val),
+            ),
+            const SizedBox(height: 12),
+            
+            // 搜索结果列表
+            Expanded(
+              child: ListView(
+                children: [
+                  ...filteredIngredients.map((ing) {
+                    // 判断这个食材是否已经在购物车里了（并且还没买）
+                    final isAlreadyInCart = cartItems.any((item) => item.ingredientId == ing.id && !item.isPurchased);
+
+                    return ListTile(
+                      title: Text(
+                        ing.name,
+                        style: TextStyle(
+                          color: isAlreadyInCart ? Colors.grey : Colors.black87,
+                          decoration: isAlreadyInCart ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      subtitle: Text(
+                        ing.inStock ? '当前有库存' : '当前缺货',
+                        style: TextStyle(fontSize: 12, color: ing.inStock ? Colors.grey : Colors.red),
+                      ),
+                      trailing: isAlreadyInCart
+                          ? const Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.check, color: Colors.grey, size: 16),
+                              SizedBox(width: 4),
+                              Text('已在购物车', style: TextStyle(color: Colors.grey, fontSize: 12))
+                            ])
+                          : const Icon(Icons.add_shopping_cart, color: Colors.teal),
+                      onTap: isAlreadyInCart
+                          ? null
+                          : () async {
+                              // 如果是现有食材，点击直接加入购物车！
+                              ing.inStock = false; // 因为要买，标为缺货
+                              await ref.read(inventoryProvider.notifier).addOrUpdateIngredient(ing);
+                              
+                              final newItem = ShoppingItem(
+                                id: generateId(),
+                                ingredientId: ing.id,
+                                groupName: '🛒 快捷补货',
+                              );
+                              await ref.read(cartProvider.notifier).addOrUpdateItem(newItem);
+                              
+                              if (context.mounted) Navigator.pop(context); // 选完自动关闭搜索框
+                            },
+                    );
+                  }),
+
+                  // 🌟 如果没搜到完全匹配的，显示蓝色新建按钮
+                  if (_searchQuery.isNotEmpty && !exactMatchExists)
+                    ListTile(
+                      leading: const Icon(Icons.add, color: Colors.blueAccent),
+                      title: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(color: Colors.black87, fontSize: 16),
+                          children: [
+                            const TextSpan(text: '新建食材 '),
+                            TextSpan(
+                                text: '"$_searchQuery"',
+                                style: const TextStyle(
+                                    color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                      onTap: () => _openCreateIngredientDialog(_searchQuery),
+                    )
+                ],
+              ),
+            )
+          ],
+        ),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
-          onPressed: (selectedCategoryId == null || nameCtrl.text.isEmpty) ? null : () async {
-            // 1. 创建新食材并入库
-            final newIng = Ingredient(id: generateId(), name: nameCtrl.text, categoryId: selectedCategoryId!, inStock: false);
-            await ref.read(inventoryProvider.notifier).addOrUpdateIngredient(newIng);
-            
-            // 2. 创建购物项并放入购物车
-            final newItem = ShoppingItem(id: generateId(), ingredientId: newIng.id, groupName: '🛒 手动添加');
-            await ref.read(cartProvider.notifier).addOrUpdateItem(newItem);
-            
-            if (context.mounted) Navigator.pop(context);
-          },
-          child: const Text('Add'),
-        )
-      ],
     );
   }
 }

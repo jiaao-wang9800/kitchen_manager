@@ -13,12 +13,17 @@ class IngredientEditDialog extends ConsumerStatefulWidget {
   // 🌟 新增这一行：允许外部拦截保存动作
   final void Function(Ingredient)? onSaveOverride;
 
+  // 🌟 新增：接收从搜索框传过来的初始名字
+  final String? initialName; 
+  
+
   const IngredientEditDialog({
     super.key, 
     this.existingIngredient, 
     this.defaultCategoryId,
     this.defaultLocation,
     this.onSaveOverride, // 🌟 新增
+    this.initialName, // 🌟 新增
   });
 
   @override
@@ -44,7 +49,9 @@ class _IngredientEditDialogState extends ConsumerState<IngredientEditDialog> {
     super.initState();
     final isEdit = widget.existingIngredient != null;
     
-    nameController = TextEditingController(text: isEdit ? widget.existingIngredient!.name : '');
+
+    nameController = TextEditingController(text: isEdit ? widget.existingIngredient!.name : (widget.initialName ?? ''));
+
     amountController = TextEditingController(
       text: isEdit && widget.existingIngredient!.numericAmount != null 
           ? widget.existingIngredient!.numericAmount.toString() 
