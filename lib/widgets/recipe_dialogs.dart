@@ -37,6 +37,8 @@ class _RecipeEditDialogState extends ConsumerState<RecipeEditDialog> {
   String ingredientSearchQuery = '';
   final TextEditingController _ingSearchController = TextEditingController();
 
+  
+
   @override
   void initState() {
     super.initState();

@@ -202,7 +202,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     final mains = _selectedIngredients.where((ri) => ri.isMain).toList();
     final seasonings = _selectedIngredients.where((ri) => !ri.isMain).toList();
     
-    return Scaffold(
+return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA), 
       body: Stack(
         children: [
@@ -210,32 +210,46 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 🌟 1. 修复照片拦截问题
                 SizedBox(
                   height: 380,
                   width: double.infinity,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      GestureDetector(
-                        onTap: _isEditing ? () async {
-                          final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-                          if (image != null) {
-                            setState(() => recipe.imagePath = image.path);
-                          }
-                        } : null,
-                        child: recipe.imagePath != null
-                          ? Image.file(File(recipe.imagePath!), fit: BoxFit.cover)
-                          : Container(color: Colors.grey[400], child: Icon(_isEditing ? Icons.add_a_photo : Icons.restaurant, size: 80, color: Colors.white)),
-                      ),
+                      // 底层图片
+                      recipe.imagePath != null
+                        ? Image.file(File(recipe.imagePath!), fit: BoxFit.cover)
+                        : Container(color: Colors.grey[400], child: const Icon(Icons.restaurant, size: 80, color: Colors.white)),
+                      
+                      // 中间层：黑色渐变遮罩 (就是这个吃掉了原来的点击事件)
                       Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withValues(alpha: 0.1), Colors.transparent, Colors.black.withValues(alpha: 0.8)]))),
 
+                      // 顶层：如果是编辑模式，盖上一层可以直接点击的浮层组件
                       if (_isEditing)
-                        Positioned(
-                          top: 100, right: 16,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-                            child: const Row(children: [Icon(Icons.camera_alt, color: Colors.white, size: 16), SizedBox(width: 4), Text('点击更换封面', style: TextStyle(color: Colors.white, fontSize: 12))]),
+                        Positioned.fill(
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () async {
+                                final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                                if (image != null) setState(() => recipe.imagePath = image.path);
+                              },
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white54, width: 1.5)),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.add_a_photo, color: Colors.white, size: 20),
+                                      SizedBox(width: 8),
+                                      Text('点击上传封面照片', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
 
@@ -252,83 +266,47 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 15, offset: const Offset(0, 8))],
-                    ),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 15, offset: const Offset(0, 8))]),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                           Expanded(
                           child: _isEditing
-                              // ==========================================
-                              // ✏️ 编辑模式：显示所有的标签，并且可以点击修改
-                              // ==========================================
                               ? (allRecipeCategories.isEmpty
                                   ? const Text('暂无可用的标签~', style: TextStyle(color: Colors.grey, fontSize: 13))
                                   : Wrap(
-                                      spacing: 10.0,
-                                      runSpacing: 10.0,
+                                      spacing: 10.0, runSpacing: 10.0,
                                       children: allRecipeCategories.map((cat) {
                                         final isSelected = _editCategoryIds.contains(cat.id);
                                         return InkWell(
                                           borderRadius: BorderRadius.circular(20),
                                           onTap: () {
-                                            setState(() {
-                                              isSelected ? _editCategoryIds.remove(cat.id) : _editCategoryIds.add(cat.id);
-                                            });
+                                            setState(() { isSelected ? _editCategoryIds.remove(cat.id) : _editCategoryIds.add(cat.id); });
                                           },
                                           child: AnimatedContainer(
                                             duration: const Duration(milliseconds: 200),
                                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade100,
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade300,
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              cat.name,
-                                              style: TextStyle(
-                                                color: isSelected ? Colors.white : Colors.grey.shade700,
-                                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                                fontSize: 13,
-                                              ),
-                                            ),
+                                            decoration: BoxDecoration(color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: isSelected ? const Color(0xFF10C07B) : Colors.grey.shade300, width: 1)),
+                                            child: Text(cat.name, style: TextStyle(color: isSelected ? Colors.white : Colors.grey.shade700, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
                                           ),
                                         );
                                       }).toList(),
                                     ))
-                              // ==========================================
-                              // 👁️ 浏览模式：(你原本的代码) 只显示已有的标签
-                              // ==========================================
                               : Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
+                                  spacing: 8, runSpacing: 8,
                                   children: allRecipeCategories
                                       .where((cat) => recipe.categoryIds.contains(cat.id))
                                       .map((cat) => Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                            decoration: BoxDecoration(
-                                                color: const Color(0xFF4A5D4E).withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(16)),
-                                            child: Text(cat.name,
-                                                style: const TextStyle(
-                                                    fontSize: 13,
-                                                    color: Color(0xFF4A5D4E),
-                                                    fontWeight: FontWeight.bold)),
+                                            decoration: BoxDecoration(color: const Color(0xFF4A5D4E).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)),
+                                            child: Text(cat.name, style: const TextStyle(fontSize: 13, color: Color(0xFF4A5D4E), fontWeight: FontWeight.bold)),
                                           ))
                                       .toList(),
                                 ),
                         ),
-
                         if (!_isEditing)
                           ElevatedButton.icon(
-                            icon: const Icon(Icons.calendar_month, size: 16),
-                            label: const Text('加入日历'),
+                            icon: const Icon(Icons.calendar_month, size: 16), label: const Text('加入日历'),
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A5D4E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 0),
                             onPressed: () => _addToCalendar(context, ref),
                           )
@@ -342,22 +320,14 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (_isEditing) ...[
-                        // 1. 菜谱名字输入框
-                        TextField(
-                          controller: _nameController, 
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold), 
-                          decoration: const InputDecoration(labelText: 'Recipe Name', border: OutlineInputBorder())
-                        ),
+                        TextField(controller: _nameController, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold), decoration: const InputDecoration(labelText: 'Recipe Name', border: OutlineInputBorder())),
                         const SizedBox(height: 16),
-
-                      
                       ],
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('所需食材', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2D3436))),
-                          if (!_isEditing)
-                            Text('${_selectedIngredients.length} 项', style: const TextStyle(color: Colors.grey, fontSize: 14)),
+                          if (!_isEditing) Text('${_selectedIngredients.length} 项', style: const TextStyle(color: Colors.grey, fontSize: 14)),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -365,81 +335,57 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                         TextField(
                           controller: _ingSearchController,
                           decoration: InputDecoration(
-                            hintText: '搜索已有食材，或输入新名称...',
-                            prefixIcon: const Icon(Icons.search),
-                            filled: true, fillColor: Colors.white,
+                            hintText: '搜索已有食材，或输入新名称...', prefixIcon: const Icon(Icons.search), filled: true, fillColor: Colors.white,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            suffixIcon: _ingSearchQuery.isNotEmpty
-                              ? IconButton(icon: const Icon(Icons.clear, color: Colors.grey), onPressed: () => setState(() { _ingSearchController.clear(); _ingSearchQuery = ''; }))
-                              : null,
+                            suffixIcon: _ingSearchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, color: Colors.grey), onPressed: () => setState(() { _ingSearchController.clear(); _ingSearchQuery = ''; })) : null,
                           ),
                           onChanged: (val) => setState(() => _ingSearchQuery = val)
                         ),
-                        
-                              if (_ingSearchQuery.isNotEmpty)
-                                Container(
-                                  margin: const EdgeInsets.only(top: 8, bottom: 16),
-                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF4A5D4E).withValues(alpha: 0.3))),
-                                  child: Column(
-                                    children: [
-                                      // 1. 显示匹配到的现有食材
-                                      ...filteredIngredients.map((ing) {
-                                        final isAlreadyAdded = _selectedIngredients.any((ri) => ri.ingredientId == ing.id);
-                                        return ListTile(
-                                          title: Text(ing.name, style: TextStyle(color: isAlreadyAdded ? Colors.grey : Colors.black87, decoration: isAlreadyAdded ? TextDecoration.lineThrough : null)),
-                                          trailing: isAlreadyAdded
-                                            ? const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check, color: Colors.grey, size: 16), SizedBox(width: 4), Text('已添加', style: TextStyle(color: Colors.grey, fontSize: 12))])
-                                            : const Icon(Icons.add_circle_outline, color: Color(0xFF4A5D4E)),
-                                          onTap: isAlreadyAdded ? null : () {
-                                            setState(() {
-                                              _selectedIngredients.add(RecipeIngredient(ingredientId: ing.id, quantity: '适量', isMain: true));
-                                              _qtyControllers[ing.id] = TextEditingController(text: '适量');
-                                              _ingSearchController.clear();
-                                              _ingSearchQuery = '';
-                                            });
-                                          },
-                                        );
-                                      }),
-
-                                      // 🌟 2. 核心改动：调用全新高级底部弹窗
-                                      if (!filteredIngredients.any((ing) => ing.name.trim().toLowerCase() == _ingSearchQuery.trim().toLowerCase()))
-                                        ListTile(
-                                          leading: const Icon(Icons.add, color: Colors.blueAccent),
-                                          title: RichText(
-                                            text: TextSpan(
-                                              style: const TextStyle(color: Colors.black87, fontSize: 16),
-                                              children: [
-                                                const TextSpan(text: '新建食材 '),
-                                                TextSpan(text: '"$_ingSearchQuery"', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
-                                              ],
-                                            ),
-                                          ),
-                                          onTap: () => _openCreateIngredientBottomSheet(_ingSearchQuery),
-                                        )
-                                    ],
-                                  ),
-                                ),
+                        if (_ingSearchQuery.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8, bottom: 16),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF4A5D4E).withValues(alpha: 0.3))),
+                            child: Column(
+                              children: [
+                                ...filteredIngredients.map((ing) {
+                                  final isAlreadyAdded = _selectedIngredients.any((ri) => ri.ingredientId == ing.id);
+                                  return ListTile(
+                                    title: Text(ing.name, style: TextStyle(color: isAlreadyAdded ? Colors.grey : Colors.black87, decoration: isAlreadyAdded ? TextDecoration.lineThrough : null)),
+                                    trailing: isAlreadyAdded ? const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check, color: Colors.grey, size: 16), SizedBox(width: 4), Text('已添加', style: TextStyle(color: Colors.grey, fontSize: 12))]) : const Icon(Icons.add_circle_outline, color: Color(0xFF4A5D4E)),
+                                    onTap: isAlreadyAdded ? null : () {
+                                      setState(() {
+                                        _selectedIngredients.add(RecipeIngredient(ingredientId: ing.id, quantity: '适量', isMain: true));
+                                        _qtyControllers[ing.id] = TextEditingController(text: '适量');
+                                        _ingSearchController.clear(); _ingSearchQuery = '';
+                                      });
+                                    },
+                                  );
+                                }),
+                                if (!filteredIngredients.any((ing) => ing.name.trim().toLowerCase() == _ingSearchQuery.trim().toLowerCase()))
+                                  ListTile(
+                                    leading: const Icon(Icons.add, color: Colors.blueAccent),
+                                    title: RichText(text: TextSpan(style: const TextStyle(color: Colors.black87, fontSize: 16), children: [const TextSpan(text: '新建食材 '), TextSpan(text: '"$_ingSearchQuery"', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold))])),
+                                    onTap: () => _openCreateIngredientBottomSheet(_ingSearchQuery),
+                                  )
+                              ],
+                            ),
+                          ),
                         const SizedBox(height: 16),
 
                         if (_selectedIngredients.isNotEmpty)
                           ListView.builder(
-                            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _selectedIngredients.length,
+                            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: _selectedIngredients.length,
                             itemBuilder: (context, index) {
                               final ri = _selectedIngredients[index];
                               final ing = inventory.firstWhere((i) => i.id == ri.ingredientId, orElse: () => Ingredient(id: '', name: 'Unknown', categoryId: ''));
                               return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+                                margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
                                 child: Column(
                                   children: [
                                     Row(
                                       children: [
                                         Expanded(child: Text(ing.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                                        IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () {
-                                          setState(() { _selectedIngredients.removeAt(index); _qtyControllers.remove(ing.id)?.dispose(); });
-                                        })
+                                        IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () { setState(() { _selectedIngredients.removeAt(index); _qtyControllers.remove(ing.id)?.dispose(); }); })
                                       ],
                                     ),
                                     const SizedBox(height: 8),
@@ -458,57 +404,83 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                             }
                           ),
                       ] else ...[
-                        if (mains.isNotEmpty) ...[
-                          const Text('主料', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey)),
-                          const SizedBox(height: 12),
-                          ...mains.map((ri) => _buildIngredientTile(ri, inventory)),
-                        ],
-                        if (seasonings.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          const Text('调味料', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey)),
-                          const SizedBox(height: 12),
-                          ...seasonings.map((ri) => _buildIngredientTile(ri, inventory)),
-                        ],
+                        if (mains.isNotEmpty) ...[const Text('主料', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey)), const SizedBox(height: 12), ...mains.map((ri) => _buildIngredientTile(ri, inventory))],
+                        if (seasonings.isNotEmpty) ...[const SizedBox(height: 12), const Text('调味料', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey)), const SizedBox(height: 12), ...seasonings.map((ri) => _buildIngredientTile(ri, inventory))],
                       ],
                       const SizedBox(height: 40),
+                      
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('烹饪步骤', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2D3436))),
                           if (_isEditing)
-                            IconButton(
-                              icon: const Icon(Icons.add_circle, color: Color(0xFF4A5D4E)),
-                              onPressed: () => setState(() => _stepControllers.add(TextEditingController()))
-                            ),
+                            IconButton(icon: const Icon(Icons.add_circle, color: Color(0xFF4A5D4E)), onPressed: () => setState(() => _stepControllers.add(TextEditingController()))),
                         ],
                       ),
                       const SizedBox(height: 20),
-                      ListView.builder(
-                        shrinkWrap: true, padding: EdgeInsets.zero, physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _isEditing ? _stepControllers.length : recipe.steps.length,
-                        itemBuilder: (context, index) {
-                          if (_isEditing) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(radius: 12, backgroundColor: const Color(0xFF4A5D4E), child: Text('${index + 1}', style: const TextStyle(color: Colors.white, fontSize: 12))),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: TextField(controller: _stepControllers[index], decoration: const InputDecoration(border: OutlineInputBorder(), filled: true, fillColor: Colors.white))),
-                                  IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () => setState(() => _stepControllers.removeAt(index))),
-                                ],
-                              ),
-                            );
-                          } else {
-                            return _buildTimelineStep(index, recipe.steps[index], index == recipe.steps.length - 1);
-                          }
-                        },
-                      ),
+
+                      // 🌟 2. 核心大招：拖拽排序与多行展开支持
+                      _isEditing
+                        ? ReorderableListView.builder(
+                            shrinkWrap: true, // 必须设置，否则报错
+                            physics: const NeverScrollableScrollPhysics(), // 让外层响应滚动
+                            buildDefaultDragHandles: false, // 🌟 关键修复：关闭系统默认的右侧占位手柄
+                            itemCount: _stepControllers.length,
+                            onReorder: (oldIndex, newIndex) {
+                              setState(() {
+                                // 处理向下拖拽时索引偏移的系统行为
+                                if (newIndex > oldIndex) newIndex -= 1;
+                                final item = _stepControllers.removeAt(oldIndex);
+                                _stepControllers.insert(newIndex, item);
+                              });
+                            },
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                key: ValueKey(_stepControllers[index]), // 🌟 ReorderableListView 必须带 Key
+                                padding: const EdgeInsets.only(bottom: 12.0),
+                                child: Row(
+
+                                  crossAxisAlignment: CrossAxisAlignment.start, // 顶部对齐以适配多行
+                                  children: [
+                                    // 🌟 关键修复：给左侧图标注入“真正的拖拽灵魂”
+                                    ReorderableDragStartListener(
+                                      index: index,
+                                      child: const Padding(
+                                        padding: EdgeInsets.only(top: 14.0, right: 8.0, left: 4.0),
+                                        child: Icon(Icons.drag_indicator, color: Colors.grey),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 10.0),
+                                      child: CircleAvatar(radius: 12, backgroundColor: const Color(0xFF4A5D4E), child: Text('${index + 1}', style: const TextStyle(color: Colors.white, fontSize: 12))),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _stepControllers[index],
+                                        maxLines: null, // 允许多行自动展开
+                                        keyboardType: TextInputType.multiline,
+                                        decoration: const InputDecoration(border: OutlineInputBorder(), filled: true, fillColor: Colors.white)
+                                      )
+                                    ),
+                                    IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () => setState(() => _stepControllers.removeAt(index))),
+                                  ],
+                                ),
+                              );
+                            },
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true, padding: EdgeInsets.zero, physics: const NeverScrollableScrollPhysics(),
+                            itemCount: recipe.steps.length,
+                            itemBuilder: (context, index) {
+                              return _buildTimelineStep(index, recipe.steps[index], index == recipe.steps.length - 1);
+                            },
+                          ),
+
                       if (_isEditing) ...[
                         const SizedBox(height: 40),
                         ElevatedButton.icon(
-                          icon: const Icon(Icons.delete_outline),
-                          label: const Text('删除此菜谱', style: TextStyle(fontWeight: FontWeight.bold)),
+                          icon: const Icon(Icons.delete_outline), label: const Text('删除此菜谱', style: TextStyle(fontWeight: FontWeight.bold)),
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.red.withValues(alpha: 0.1), foregroundColor: Colors.red, elevation: 0, minimumSize: const Size(double.infinity, 54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                           onPressed: () => _confirmDelete(recipe),
                         ),
@@ -521,8 +493,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
             ),
           ),
           Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 16, right: 16,
+            top: MediaQuery.of(context).padding.top + 8, left: 16, right: 16,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -533,17 +504,12 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                     icon: Icon(_isEditing ? Icons.check : Icons.edit_outlined, color: Colors.black87, size: 20),
                     onPressed: () async {
                         if (_isEditing) {
-                          // 1. 如果当前已经是编辑状态，说明你点击是为了“保存”
-                          // 🌟 在保存之前，把我们选好的新标签赋值给 recipe
                           recipe.categoryIds = _editCategoryIds; 
-                          
                           await _saveChanges(recipe);
-                          setState(() => _isEditing = false); // 退出编辑模式
+                          setState(() => _isEditing = false); 
                         } else {
-                          // 2. 如果当前不是编辑状态，说明你点击是为了“开始编辑”
                           setState(() {
-                            _isEditing = true; // 进入编辑模式
-                            // 🌟 核心：就在这一刻，把菜谱原有的标签复制到我们的编辑池里！
+                            _isEditing = true; 
                             _editCategoryIds = List.from(recipe.categoryIds); 
                           });
                         }
