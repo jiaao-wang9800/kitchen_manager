@@ -9,6 +9,7 @@ import '../data/mock_database.dart'; // 仅保留用于直接操作未迁移的B
 import '../services/ai_receipt_service.dart';
 import '../providers/recipe_provider.dart';
 import '../providers/kitchen_provider.dart';
+import 'ingredient_edit_dialog.dart'; //  导入高级食材编辑弹窗
 
 // ==========================================
 // 1. 添加/编辑菜谱的独立弹窗组件
@@ -62,6 +63,44 @@ class _RecipeEditDialogState extends ConsumerState<RecipeEditDialog> {
     _ingSearchController.dispose();
     for (var ctrl in qtyControllers.values) { ctrl.dispose(); }
     super.dispose();
+
+
+  }
+
+
+  // 🌟 核心替换：呼出高级底部弹窗并拦截保存
+  void _openCreateIngredientBottomSheet(String initialName) {
+    // 关闭软键盘，防止界面被顶起导致显示异常
+    FocusScope.of(context).unfocus(); 
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) => IngredientEditDialog(
+        initialName: initialName,
+        onSaveOverride: (newIng) async {
+          // 1. 拦截保存动作：设为缺货（仅仅是用于菜谱原料，并不代表现在买到了）
+          newIng.inStock = false;
+          
+          // 2. 保存这个新食材到全局库存
+          await ref.read(inventoryProvider.notifier).addOrUpdateIngredient(newIng);
+          
+          // 3. 更新当前菜谱编辑表单的状态
+          setState(() {
+            selectedIngredients.add(RecipeIngredient(ingredientId: newIng.id, quantity: '适量', isMain: true));
+            qtyControllers[newIng.id] = TextEditingController(text: '适量');
+            _ingSearchController.clear();
+            ingredientSearchQuery = '';
+          });
+          
+          // 4. 关闭底部弹窗
+          if (bottomSheetContext.mounted) {
+            Navigator.pop(bottomSheetContext);
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -201,8 +240,7 @@ class _RecipeEditDialogState extends ConsumerState<RecipeEditDialog> {
                         );
                       }),
 
-                      // 🌟 2. 核心改动：智能判断是否显示“新建”选项
-                      // 逻辑：只有当【搜索结果里没有任何一个名字】与【输入框内容】完全一致时，才允许新建。
+                      // 🌟 2. 核心改动：调用全新高级底部弹窗
                       if (!filteredIngredients.any((ing) => ing.name.trim().toLowerCase() == ingredientSearchQuery.trim().toLowerCase()))
                         ListTile(
                           leading: const Icon(Icons.add, color: Colors.blueAccent),
@@ -215,12 +253,12 @@ class _RecipeEditDialogState extends ConsumerState<RecipeEditDialog> {
                               ],
                             ),
                           ),
-                          onTap: () => _showQuickAddIngredientDialog(ingredientSearchQuery),
+                          onTap: () => _openCreateIngredientBottomSheet(ingredientSearchQuery),
                         )
                     ],
                   ),
                 ),
-              const SizedBox(height: 16),             
+              const SizedBox(height: 16),         
               
 
               if (selectedIngredients.isNotEmpty)
@@ -307,55 +345,6 @@ class _RecipeEditDialogState extends ConsumerState<RecipeEditDialog> {
           child: const Text('Save')
         ),
       ],
-    );
-  }
-
-  // Quick Add Ingredient 辅助方法保持 Riverpod 状态同步
-  Future<void> _showQuickAddIngredientDialog([String? initialName]) async {
-    final newIngNameCtrl = TextEditingController(text: initialName ?? '');
-    final allCategories = ref.read(categoryProvider);
-    String? selectedCatId = allCategories.isNotEmpty ? allCategories.first.id : null;
-
-    await showDialog(
-      context: context,
-      builder: (innerContext) => StatefulBuilder(
-        builder: (innerContext, setInnerState) => AlertDialog(
-          title: const Text('Quick Add Ingredient'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(controller: newIngNameCtrl, decoration: const InputDecoration(labelText: 'Ingredient Name'), onChanged: (val) => setInnerState(() {})),
-                const SizedBox(height: 16),
-                const Text('Category:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                const SizedBox(height: 8),
-                allCategories.isEmpty 
-                  ? const Text('No categories exist!', style: TextStyle(color: Colors.red))
-                  : Wrap(spacing: 8.0, runSpacing: 4.0, children: allCategories.map((cat) { return ChoiceChip(label: Text(cat.name), selected: selectedCatId == cat.id, selectedColor: const Color(0xFF4A5D4E).withValues(alpha: 0.3), onSelected: (bool selected) { if (selected) setInnerState(() => selectedCatId = cat.id); }); }).toList()),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(innerContext), child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A5D4E), foregroundColor: Colors.white),
-              onPressed: (selectedCatId == null || newIngNameCtrl.text.trim().isEmpty) ? null : () async {
-                final newIng = Ingredient(id: generateId(), name: newIngNameCtrl.text.trim(), categoryId: selectedCatId!, inStock: false);
-                await ref.read(inventoryProvider.notifier).addOrUpdateIngredient(newIng);
-                setState(() {
-                  selectedIngredients.add(RecipeIngredient(ingredientId: newIng.id, quantity: '适量', isMain: true));
-                  qtyControllers[newIng.id] = TextEditingController(text: '适量');
-                  _ingSearchController.clear();
-                  ingredientSearchQuery = '';
-                });
-                if (innerContext.mounted) Navigator.pop(innerContext);
-              },
-              child: const Text('Create'),
-            )
-          ],
-        )
-      )
     );
   }
 }
